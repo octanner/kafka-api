@@ -2,11 +2,25 @@
 
 ## Synopis
 
-Runs a REST API to offer management of Kafka topics.
+Runs a REST API to offer management of Kafka topics, consumergroups, users, and ACLs
 
 ## Details
 
-* GET ... (todo)
+```
+get /v1/kafka/cluster/:cluster/consumergroups
+get /v1/kafka/cluster/:cluster/credentials/:username
+get /v1/kafka/cluster/:cluster/topic/:topic
+get /v1/kafka/cluster/:cluster/topic/:topic/consumergroups
+get /v1/kafka/cluster/:cluster/topics
+post /v1/kafka/cluster/:cluster/topic
+post /v1/kafka/cluster/:cluster/user
+post /v1/kafka/cluster/:cluster/user/:username/topic/:topic/consumergroup/rotate
+put /v1/kafka/cluster/:cluster/acl/user/:user/topic/:topic/role/:role
+put /v1/kafka/cluster/:cluster/topic/:topic/retentionms/:retentionms
+delete /v1/kafka/cluster/:cluster/topic/:topic
+
+```
+
 
 ## Runtime Environment Variables
 ```
@@ -53,4 +67,17 @@ PORT
 ```
 ## Build
 
-* mvn deploy
+```
+mvn dependency:resolve
+mvn verify
+mvn package
+```
+
+## Run
+
+```
+java -jar target/kafka-api-jar-with-dependencies.jar
+```
+
+
+
