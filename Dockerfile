@@ -14,7 +14,7 @@ RUN ["mvn", "verify"]
 # Adding source, compile and package into a fat jar
 ADD src /code/src
 RUN ["mvn", "package"]
-
-EXPOSE 3800
-CMD ["/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-jar", "target/oct-kafka-api-jar-with-dependencies.jar"]
+ADD create.sql create.sql
+EXPOSE 9000
+CMD ["/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-jar", "target/kafka-api-jar-with-dependencies.jar"]
 
