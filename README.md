@@ -19,6 +19,23 @@ put /v1/kafka/cluster/:cluster/acl/user/:user/topic/:topic/role/:role
 put /v1/kafka/cluster/:cluster/topic/:topic/retentionms/:retentionms
 delete /v1/kafka/cluster/:cluster/topic/:topic
 
+
+JSON payload exmample for creation of a topic is
+
+{
+  "topic": {
+    "name": "tt9",
+    "description":"User.Friendly.Name",
+    "organization":"testorg",
+    "config": {
+      "cleanup.policy": "delete",
+      "partitions": 8,
+      "retention.ms":8888
+    }
+  }
+}
+
+
 ```
 
 
