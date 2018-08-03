@@ -1,20 +1,13 @@
-FROM java:8 
+FROM quay.octanner.io/base/oct-scala:2.12.2-sbt-0.13.15-play-2.6.1
 
-# Install maven
-RUN apt-get update
-RUN apt-get install -y maven
+COPY build.sbt start.sh ./
+COPY project project/
+RUN sbt update
 
-WORKDIR /code
+## If you copy the source after the update, then you can actually cache artifacts
+COPY conf conf
+COPY app app
 
-# Prepare by downloading dependencies
-ADD pom.xml /code/pom.xml
-RUN ["mvn", "dependency:resolve"]
-RUN ["mvn", "verify"]
+RUN sbt compile stage
 
-# Adding source, compile and package into a fat jar
-ADD src /code/src
-RUN ["mvn", "package"]
-
-EXPOSE 3800
-CMD ["/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-jar", "target/oct-kafka-api-jar-with-dependencies.jar"]
-
+ENTRYPOINT ["./start.sh"]
