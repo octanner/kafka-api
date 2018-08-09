@@ -3,6 +3,7 @@ package controllers
 import javax.inject.Inject
 import models.http.HttpModels._
 import play.api.Logger
+import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }
 import services.TopicService
 
@@ -17,7 +18,8 @@ class TopicController @Inject() (service: TopicService) extends InjectedControll
   }
 
   private def createTopic(cluster: String)(topic: TopicRequest): Future[Result] = {
-    service.createTopic(cluster, topic.topic)
-    Future(Ok)
+    service.createTopic(cluster, topic.topic).map { topic =>
+      Ok(Json.toJson(TopicResponse(topic)))
+    }
   }
 }
