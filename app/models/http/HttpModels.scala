@@ -13,6 +13,8 @@ object HttpModels {
   final case class TopicRequest(topic: Topic) extends HttpRequest
 
   implicit val topicRequestFormat = Json.format[TopicRequest]
+  implicit val errorFormat = Json.format[Error]
+  implicit val errorRespFormat = Json.format[ErrorResponse]
 
   def createErrorResponse(title: String, message: String): ErrorResponse = ErrorResponse(Seq(Error(title, message)))
 }

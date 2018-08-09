@@ -9,8 +9,8 @@ import play.api.mvc._
 import scala.concurrent.Future
 
 /**
-  * Mix-in trait for controllers that need to process request body.
-  */
+ * Mix-in trait for controllers that need to process request body.
+ */
 trait RequestProcessor {
   this: InjectedController =>
 

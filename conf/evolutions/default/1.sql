@@ -7,10 +7,10 @@ CREATE TABLE  IF NOT EXISTS topic (
     replicas integer,
     retention_ms integer,
     cleanup_policy text,
-    created_timestamp timestamp without time zone DEFAULT now(),
+    created_timestamp timestamp without time zone,
     cluster text,
     organization text,
-    updated_timestamp timestamp without time zone,
+    updated_timestamp timestamp without time zone DEFAULT now(),
     description text
 );
 

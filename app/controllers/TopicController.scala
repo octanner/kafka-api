@@ -3,13 +3,14 @@ package controllers
 import javax.inject.Inject
 import models.http.HttpModels._
 import play.api.Logger
-import play.api.mvc.{InjectedController, Result}
+import play.api.mvc.{ InjectedController, Result }
 import services.TopicService
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-class TopicController @Inject()(service: TopicService) extends InjectedController with RequestProcessor {
-  val logger = Logger
+class TopicController @Inject() (service: TopicService) extends InjectedController with RequestProcessor {
+  val logger = Logger(this.getClass)
 
   def create(cluster: String) = Action.async { implicit request =>
     processRequest[TopicRequest](createTopic(cluster))
