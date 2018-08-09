@@ -71,6 +71,11 @@ class TopicService @Inject() (db: Database, dao: TopicDao) {
     topicCreationResult
   }
 
+  def getTopic(cluster: String, topicName: String): Option[Topic] = {
+    db.withConnection { implicit conn =>
+      dao.getTopicInfo(cluster, topicName)
+    }
+  }
 }
 
 object TopicService {
