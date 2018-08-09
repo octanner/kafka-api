@@ -3,9 +3,8 @@
 -- Attempt to install the extensions, but trap errors (in case in lower lanes without permission)
 do language plpgsql $$
 begin
-    CREATE EXTENSION IF NOT EXISTS pg_trgm;;
-    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";;
-    exception when others then
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";;
+  exception when others then
     raise notice 'Unable to create extensions for tag searching. Please verify you have database ';;
     raise notice '% %', SQLERRM, SQLSTATE;;
 end;;
