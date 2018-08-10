@@ -5,7 +5,6 @@ import models.http.HttpModels._
 import play.api.Logger
 import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }
-import play.api.libs.json._
 import services.TopicService
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -24,10 +23,10 @@ class TopicController @Inject() (service: TopicService) extends InjectedControll
     }
   }
 
-  def getTopicInfo(cluster: String, topic: String) = Action.async { implicit request =>
-    service.getTopic(cluster, topic) match {
-      case Some(topic) => Future(Ok(Json.obj("topic" -> topic)))
-      case None        => Future(NotFound)
+  def getTopicInfo(cluster: String, topicName: String) = Action.async { implicit request =>
+    service.getTopic(cluster, topicName) match {
+      case Some(topic) => Future(Ok(Json.toJson(TopicResponse(topic))))
+      case None        => Future(NotFound(s"Cannot find topic $topicName in cluster $cluster"))
     }
   }
 

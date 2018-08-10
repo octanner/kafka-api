@@ -4,7 +4,7 @@ import java.sql.Connection
 
 import anorm._
 import javax.inject.Inject
-import models.Models.{ Topic, TopicConfig }
+import models.Models.{ Topic, TopicConfiguration }
 import org.joda.time.DateTime
 
 class TopicDao @Inject() () {
@@ -25,7 +25,7 @@ class TopicDao @Inject() () {
 
   val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"
   val topicColumns = s"topic, description, organization, $topicConfigColumns"
-  implicit val topicConfigParser = Macro.parser[TopicConfig]("cleanup_policy", "partitions", "retention_ms", "replicas")
+  implicit val topicConfigParser = Macro.parser[TopicConfiguration]("cleanup_policy", "partitions", "retention_ms", "replicas")
   implicit val topicParser = Macro.parser[Topic]("topic", "description", "organization", "cleanup_policy", "partitions", "retention_ms", "replicas")
 
 }
