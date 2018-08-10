@@ -12,7 +12,7 @@ import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.{ SaslConfigs, TopicConfig }
 import org.apache.kafka.common.errors.TopicExistsException
 import org.postgresql.util.PSQLException
-import play.api.Logger
+import play.api.{ Configuration, Logger }
 import play.api.db.Database
 import utils.Exceptions.NonUniqueTopicNameException
 
@@ -21,18 +21,23 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
-class TopicService @Inject() (db: Database, dao: TopicDao) {
+class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration) {
   import TopicService._
 
   val logger = Logger(this.getClass)
 
   def createTopic(cluster: String, topic: Topic): Future[Topic] = {
     val topicName = topic.name
-    val partitions = topic.config.partitions.getOrElse(System.getenv(cluster.toUpperCase() + "_DEFAULT_PARTITIONS").toInt)
-    val replicas = topic.config.replicas.getOrElse(System.getenv(cluster.toUpperCase() + "_DEFAULT_REPLICAS").toInt)
-    val retentionMs = topic.config.retentionMs.getOrElse(System.getenv(cluster.toUpperCase() + "_DEFAULT_RETENTION").toLong)
+    val partitions = topic.config.partitions.getOrElse(
+      conf.get[Int](cluster.toLowerCase + DEFAULT_PARTITIONS_CONFIG))
+    val replicas = topic.config.replicas.getOrElse(
+      conf.get[Int](cluster.toLowerCase + DEFAULT_REPLICAS_CONFIG))
+    val retentionMs = topic.config.retentionMs.getOrElse(
+      conf.get[Long](cluster.toLowerCase + DEFAULT_RETENTION_CONFIG))
     val cleanupPolicy = topic.config.cleanupPolicy.getOrElse(TopicConfig.CLEANUP_POLICY_DELETE)
-    val configs = Map(TopicConfig.RETENTION_MS_CONFIG -> retentionMs.toString, TopicConfig.CLEANUP_POLICY_CONFIG -> cleanupPolicy)
+    val configs = Map(
+      TopicConfig.RETENTION_MS_CONFIG -> retentionMs.toString,
+      TopicConfig.CLEANUP_POLICY_CONFIG -> cleanupPolicy)
     val topicConfig = TopicConfiguration(Some(cleanupPolicy), Some(partitions), Some(retentionMs), Some(replicas))
 
     Future {
@@ -73,21 +78,25 @@ class TopicService @Inject() (db: Database, dao: TopicDao) {
     replicas:     Int,
     topicConfigs: Map[String, String]): KafkaFuture[Void] = {
 
-    val kafkaHostName = System.getenv(cluster.toUpperCase + "_KAFKA_LOCATION")
-    val kafkaSecurityProtocol = System.getenv(cluster.toUpperCase + "_KAFKA_SECURITY_PROTOCOL")
-    val kafkaSaslMechanism = System.getenv(cluster.toUpperCase + "_KAFKA_SASL_MECHANISM")
-    val username = System.getenv(cluster.toUpperCase + "_KAFKA_ADMIN_USERNAME")
-    val password = System.getenv(cluster.toUpperCase + "_KAFKA_ADMIN_PASSWORD")
+    val kafkaHostName = conf.get[String](cluster.toLowerCase + KAFKA_LOCATION_CONFIG)
+    val kafkaSecurityProtocol = conf.getOptional[String](cluster.toLowerCase + KAFKA_SECURITY_PROTOCOL_CONFIG)
+    val kafkaSaslMechanism = conf.getOptional[String](cluster.toLowerCase + KAFKA_SASL_MECHANISM_CONFIG)
+    val username = conf.getOptional[String](cluster.toLowerCase + KAFKA_ADMIN_USERNAME_CONFIG)
+    val password = conf.getOptional[String](cluster.toLowerCase + KAFKA_ADMIN_PASSWORD_CONFIG)
+
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, kafkaSecurityProtocol)
-    props.put(SaslConfigs.SASL_MECHANISM, kafkaSaslMechanism)
-    props.put(
-      SaslConfigs.SASL_JAAS_CONFIG,
-      s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="$username" password="$password";""")
+    kafkaSecurityProtocol.map { props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, _) }
+    kafkaSaslMechanism.map { props.put(SaslConfigs.SASL_MECHANISM, _) }
+    kafkaSaslMechanism match {
+      case Some("PLAIN") =>
+        props.put(
+          SaslConfigs.SASL_JAAS_CONFIG,
+          s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="${username.getOrElse("")}" password="${password.getOrElse("")}";""")
+      case _ =>
+    }
 
-    logger.info(s"${kafkaHostName}; ${kafkaSecurityProtocol}; ${kafkaSaslMechanism}; ${username}: $password ")
     val adminClient = AdminClient.create(props)
     val topic = new NewTopic(topicName, partitions, replicas.toShort).configs(topicConfigs.asJava)
     val topicCreationResult = adminClient.createTopics(List(topic).asJava).all()
@@ -104,5 +113,13 @@ class TopicService @Inject() (db: Database, dao: TopicDao) {
 
 object TopicService {
   val ADMIN_CLIENT_ID = "kafka-api"
+  val DEFAULT_PARTITIONS_CONFIG = ".kafka.topic.default.partitions"
+  val DEFAULT_REPLICAS_CONFIG = ".kafka.topic.default.replicas"
+  val DEFAULT_RETENTION_CONFIG = ".kafka.topic.default.retention.ms"
+  val KAFKA_LOCATION_CONFIG = ".kafka.location"
+  val KAFKA_SECURITY_PROTOCOL_CONFIG = ".kafka.security.protocol"
+  val KAFKA_SASL_MECHANISM_CONFIG = ".kafka.sasl.mechanism"
+  val KAFKA_ADMIN_USERNAME_CONFIG = ".kafka.admin.username"
+  val KAFKA_ADMIN_PASSWORD_CONFIG = ".kafka.admin.password"
   val PSQL_UNIQUE_VIOLATION_CODE = "23505"
 }
