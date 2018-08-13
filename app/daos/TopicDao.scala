@@ -17,8 +17,12 @@ class TopicDao {
       .execute()
   }
 
-  def getTopicInfo(cluster: String, topicName: String)(implicit conn: Connection): Option[Topic] = {
-    SQL"""SELECT #$topicColumns FROM topic WHERE cluster = ${cluster} AND topic = ${topicName}""".as(topicParser.singleOpt)
+  def getTopicInfo(topicName: String)(implicit conn: Connection): Option[Topic] = {
+    SQL"SELECT #$topicColumns FROM topic WHERE topic = $topicName".as(topicParser.singleOpt)
+  }
+
+  def getAllTopics()(implicit conn: Connection): Seq[Topic] = {
+    SQL"SELECT #$topicColumns FROM topic".as(topicParser.*)
   }
 
   val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"

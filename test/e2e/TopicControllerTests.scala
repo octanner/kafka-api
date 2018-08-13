@@ -44,9 +44,9 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
     super.afterAll()
   }
 
-  private def getTopicFromDB(cluster: String, topicName: String): Option[Topic] = {
+  private def getTopicFromDB(topicName: String): Option[Topic] = {
     db.withTransaction { implicit conn =>
-      dao.getTopicInfo(cluster, topicName)
+      dao.getTopicInfo(topicName)
     }
   }
 
@@ -68,11 +68,41 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
       val result = futureResult.futureValue
       Logger.info(s"result status: ${result.status}, result body: ${result.body}")
       Logger.info(s"Kafka has new topic? ${topicExistsInKafka(topic.name)}")
-      Logger.info(s"Topic in DB: ${getTopicFromDB(cluster, topic.name)}")
+      Logger.info(s"Topic in DB: ${getTopicFromDB(topic.name)}")
       Status(result.status) mustBe Ok
       result.json mustBe Json.toJson(TopicResponse(topic))
       topicExistsInKafka(topic.name) mustBe true
-      getTopicFromDB(cluster, topic.name) mustBe Some(topic)
+      getTopicFromDB(topic.name) mustBe Some(topic)
+    }
+  }
+
+  "Topic Controller #get" must {
+    "get a list of all topics" in {
+      val futureResult = wsUrl(s"/v1/kafka/topics").get()
+      val result = futureResult.futureValue
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic))).toString
+
+      Status(result.status) mustBe Ok
+      result.body mustBe expectedJson
+    }
+
+    "get a single topic by name" in {
+      val futureResult = wsUrl(s"/v1/kafka/topics/${topic.name}").get()
+      val result = futureResult.futureValue
+      val expectedJson = Json.toJson(TopicResponse(topic)).toString
+
+      Status(result.status) mustBe Ok
+      result.body mustBe expectedJson
+    }
+
+    "return 404 if no topic found by given name" in {
+      val fakeTopicName = "this.doesnt.exist"
+      val futureResult = wsUrl(s"/v1/kafka/topics/$fakeTopicName").get()
+      val result = futureResult.futureValue
+      val expectedResponse = s"Cannot find topic '$fakeTopicName'"
+
+      Status(result.status) mustBe NotFound
+      result.body mustBe expectedResponse
     }
   }
 }

@@ -5,4 +5,5 @@
 GET        /octhc                                                         controllers.HealthController.health
 
 POST       /v1/kafka/cluster/:cluster/topic                               controllers.TopicController.create(cluster: String)
-GET        /v1/kafka/cluster/:cluster/topics/:topic                       controllers.TopicController.getTopicInfo(cluster: String, topic: String)
+GET        /v1/kafka/topics/:topic                                        controllers.TopicController.getTopicInfo(topic: String)
+GET        /v1/kafka/topics                                               controllers.TopicController.getAllTopics
