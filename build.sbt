@@ -40,8 +40,13 @@ libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "3.0.+
 libraryDependencies += "com.octanner.platform" %% "service-auth-play" % "1.2.+"
 libraryDependencies += "com.octanner" %% "ws-tracer-client-play" % "0.0.1"
 libraryDependencies += "com.octanner.platform" %% "service-auth-play-test" % "1.2.+" % Test
+libraryDependencies += "com.octanner.platform" %% "platform-test-tools" % "1.1.1" % Test
+libraryDependencies += "org.apache.kafka" %% "kafka" % "2.0.0"
+libraryDependencies += "net.manub" %% "scalatest-embedded-kafka" % "1.0.0" % "test"
 libraryDependencies += "io.swagger" %% "swagger-play2" % "1.6.+"
 coverageExcludedPackages := "<empty>;Reverse.*;views.*;router.*;database.*"
+
+javaOptions in Test ++= Seq("-Dconfig.file=conf/application.test.conf", "-Dplay.evolutions.db.default.autoApply=true")
 
 val preferences =
   ScalariformKeys.preferences := ScalariformKeys.preferences.value

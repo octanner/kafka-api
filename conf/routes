@@ -3,3 +3,5 @@
 # ~~~~
 
 GET        /octhc                                                         controllers.HealthController.health
+
+POST       /v1/kafka/cluster/:cluster/topic                               controllers.TopicController.create(cluster: String)
