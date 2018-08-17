@@ -37,8 +37,9 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
 
   override def afterAll(): Unit = {
     db.withTransaction { implicit conn =>
-      SQL"""delete from TOPIC;
-         """.execute()
+      SQL"""
+           delete from TOPIC;
+        """.execute()
     }
     EmbeddedKafka.stop()
     super.afterAll()
@@ -80,19 +81,19 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
     "get a list of all topics" in {
       val futureResult = wsUrl(s"/v1/kafka/topics").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic))).toString
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic)))
 
       Status(result.status) mustBe Ok
-      result.body mustBe expectedJson
+      result.json mustBe expectedJson
     }
 
     "get a single topic by name" in {
       val futureResult = wsUrl(s"/v1/kafka/topics/${topic.name}").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.toJson(TopicResponse(topic)).toString
+      val expectedJson = Json.toJson(TopicResponse(topic))
 
       Status(result.status) mustBe Ok
-      result.body mustBe expectedJson
+      result.json mustBe expectedJson
     }
 
     "return 404 if no topic found by given name" in {

@@ -1,6 +1,6 @@
 package models.http
 
-import models.Models.Topic
+import models.Models.{AclCredentials, Topic}
 import play.api.libs.json.Json
 
 trait HttpRequest
@@ -12,9 +12,13 @@ object HttpModels {
 
   final case class TopicRequest(topic: Topic) extends HttpRequest
   final case class TopicResponse(topic: Topic) extends HttpResponse
+  final case class AclRequest(topic: String, user: String, role: String) extends HttpRequest
+  final case class AclResponse(aclCredentials: AclCredentials) extends HttpResponse
 
   implicit val topicRequestFormat = Json.format[TopicRequest]
   implicit val topicResponseFormat = Json.format[TopicResponse]
+  implicit val aclRequestFormat = Json.format[AclRequest]
+  implicit val aclResponseFormat = Json.format[AclResponse]
   implicit val errorFormat = Json.format[Error]
   implicit val errorRespFormat = Json.format[ErrorResponse]
 

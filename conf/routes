@@ -7,3 +7,6 @@ GET        /octhc                                                         contro
 POST       /v1/kafka/cluster/:cluster/topic                               controllers.TopicController.create(cluster: String)
 GET        /v1/kafka/topics/:topic                                        controllers.TopicController.getTopicInfo(topic: String)
 GET        /v1/kafka/topics                                               controllers.TopicController.getAllTopics
+
+POST       /v1/kafka/cluster/:cluster/user                                controllers.AclController.create(cluster: String)
+POST       /v1/kafka/cluster/:cluster/acls                                controllers.AclController.createAclForTopic(cluster: String)

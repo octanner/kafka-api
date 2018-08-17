@@ -1,27 +1,26 @@
 package services
 
-import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import daos.TopicDao
 import javax.inject.Inject
-import models.Models.{ Topic, TopicConfiguration }
-import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig, NewTopic }
+import models.Models.{Topic, TopicConfiguration}
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
-import org.apache.kafka.common.config.{ SaslConfigs, TopicConfig }
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TopicExistsException
 import org.postgresql.util.PSQLException
-import play.api.{ Configuration, Logger }
 import play.api.db.Database
+import play.api.{Configuration, Logger}
+import utils.AdminClientUtil
 import utils.Exceptions.NonUniqueTopicNameException
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
-class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration) {
+class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration, util: AdminClientUtil) {
   import TopicService._
 
   val logger = Logger(this.getClass)
@@ -78,30 +77,11 @@ class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration) 
     replicas:     Int,
     topicConfigs: Map[String, String]): KafkaFuture[Void] = {
 
-    val kafkaHostName = conf.get[String](cluster.toLowerCase + KAFKA_LOCATION_CONFIG)
-    val kafkaSecurityProtocol = conf.getOptional[String](cluster.toLowerCase + KAFKA_SECURITY_PROTOCOL_CONFIG)
-    val kafkaSaslMechanism = conf.getOptional[String](cluster.toLowerCase + KAFKA_SASL_MECHANISM_CONFIG)
-    val username = conf.getOptional[String](cluster.toLowerCase + KAFKA_ADMIN_USERNAME_CONFIG)
-    val password = conf.getOptional[String](cluster.toLowerCase + KAFKA_ADMIN_PASSWORD_CONFIG)
-
-    val props = new Properties()
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
-    props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
-    kafkaSecurityProtocol.map { props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, _) }
-    kafkaSaslMechanism.map { props.put(SaslConfigs.SASL_MECHANISM, _) }
-    kafkaSaslMechanism match {
-      case Some("PLAIN") =>
-        props.put(
-          SaslConfigs.SASL_JAAS_CONFIG,
-          s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="${username.getOrElse("")}" password="${password.getOrElse("")}";""")
-      case _ =>
-    }
-
-    val adminClient = AdminClient.create(props)
+    val adminClient = util.getAdminClient(cluster)
     val topic = new NewTopic(topicName, partitions, replicas.toShort).configs(topicConfigs.asJava)
-    val topicCreationResult = adminClient.createTopics(List(topic).asJava).all()
+    val topicCreationResult = Try(adminClient.createTopics(List(topic).asJava).all())
     adminClient.close()
-    topicCreationResult
+    topicCreationResult.get
   }
 
   def getTopic(topicName: String): Future[Option[Topic]] = {
