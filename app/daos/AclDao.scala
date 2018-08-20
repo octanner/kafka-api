@@ -25,7 +25,7 @@ class AclDao {
     val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username '${aclRequest.user}' not claimed in cluster '$cluster'"))
     val role = aclRequest.role
     SQL"""
-          INSERT INTO permissions (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, ${role.name}, $cluster);
+          INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, ${role.name}, $cluster);
        """.executeUpdate()
   }
 
