@@ -4,21 +4,21 @@ import java.util.concurrent.ExecutionException
 
 import daos.TopicDao
 import javax.inject.Inject
-import models.Models.{Topic, TopicConfiguration}
+import models.Models.{ Topic, TopicConfiguration }
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TopicExistsException
 import org.postgresql.util.PSQLException
 import play.api.db.Database
-import play.api.{Configuration, Logger}
+import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
 import utils.Exceptions.NonUniqueTopicNameException
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration, util: AdminClientUtil) {
   import TopicService._

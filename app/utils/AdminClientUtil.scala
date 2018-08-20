@@ -4,9 +4,9 @@ import java.util.Properties
 
 import javax.inject.Inject
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig }
 import org.apache.kafka.common.config.SaslConfigs
-import play.api.{Configuration, Logger}
+import play.api.{ Configuration, Logger }
 import services.TopicService
 
 class AdminClientUtil @Inject() (conf: Configuration) {

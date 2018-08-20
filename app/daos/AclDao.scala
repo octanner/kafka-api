@@ -21,23 +21,23 @@ class AclDao {
   }
 
   def addPermissionToDb(cluster: String, aclRequest: AclRequest)(implicit conn: Connection) = {
-    val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username ${aclRequest.user} not claimed in cluster $cluster"))
-    val topicId = getTopicIdByName(cluster, aclRequest.topic).getOrElse(throw new IllegalArgumentException(s"Topic ${aclRequest.topic} not found in cluster $cluster"))
-    val role = aclRequest.role.toUpperCase
+    val topicId = getTopicIdByName(cluster, aclRequest.topic).getOrElse(throw new IllegalArgumentException(s"Topic '${aclRequest.topic}' not found in cluster '$cluster'"))
+    val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username '${aclRequest.user}' not claimed in cluster '$cluster'"))
+    val role = aclRequest.role
     SQL"""
-          INSERT INTO permissions (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, $role, $cluster)
+          INSERT INTO permissions (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, ${role.name}, $cluster);
        """.executeUpdate()
   }
 
   def getUserIdByName(cluster: String, username: String)(implicit conn: Connection): Option[String] = {
     SQL"""
-          SELECT user_id FROM acl_source WHERE cluster = $cluster AND username = $username AND claimed = true
+          SELECT user_id FROM acl_source WHERE cluster = $cluster AND username = $username AND claimed = true;
       """.as(stringParser.singleOpt)
   }
 
   def getTopicIdByName(cluster: String, topic: String)(implicit conn: Connection): Option[String] = {
     SQL"""
-          SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic
+          SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic;
       """.as(stringParser.singleOpt)
   }
 

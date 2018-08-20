@@ -1,15 +1,15 @@
 package controllers
 
 import javax.inject.Inject
-import models.http.HttpModels.{AclRequest, _}
+import models.http.HttpModels.{ AclRequest, _ }
 import play.api.Logger
 import play.api.libs.json.Json
-import play.api.mvc.{InjectedController, Result}
+import play.api.mvc.{ InjectedController, Result }
 import services.AclService
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 class AclController @Inject() (service: AclService) extends InjectedController with RequestProcessor {
   val logger = Logger(this.getClass)
@@ -28,7 +28,7 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     Try(service.createPermissions(cluster, aclRequest)) match {
       case Success(_)                           => Future(NoContent)
       case Failure(e: IllegalArgumentException) => Future(BadRequest(e.getMessage))
-      case Failure(e)                           => Future(InternalServerError)
+      case Failure(_)                           => Future(InternalServerError)
     }
   }
 
