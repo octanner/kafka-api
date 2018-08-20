@@ -1,8 +1,8 @@
 package models
 
-import play.api.libs.json._
-import play.api.libs.json.Reads._
 import play.api.libs.functional.syntax._
+import play.api.libs.json.Reads._
+import play.api.libs.json._
 
 object Models {
   case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])

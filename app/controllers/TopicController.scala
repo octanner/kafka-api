@@ -22,4 +22,18 @@ class TopicController @Inject() (service: TopicService) extends InjectedControll
       Ok(Json.toJson(TopicResponse(topic)))
     }
   }
+
+  def getTopicInfo(topicName: String) = Action.async { implicit request =>
+    service.getTopic(topicName).map {
+      case Some(topic) => Ok(Json.toJson(TopicResponse(topic)))
+      case None        => NotFound(s"Cannot find topic '$topicName'")
+    }
+  }
+
+  def getAllTopics = Action.async { implicit request =>
+    service.getAllTopics.map { topics =>
+      Ok(Json.obj("topics" -> topics))
+    }
+  }
+
 }
