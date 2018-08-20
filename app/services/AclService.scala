@@ -38,8 +38,9 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
   def createPermissions(cluster: String, aclRequest: AclRequest) = {
     db.withTransaction { implicit conn =>
       Try(dao.addPermissionToDb(cluster, aclRequest)) match {
-        case Success(_) =>
+        case Success(id) =>
           addPermissionToKafka(cluster, aclRequest)
+          id
         case Failure(e) =>
           logger.error(s"Failed to create permission in DB: ${e.getMessage}")
           throw e

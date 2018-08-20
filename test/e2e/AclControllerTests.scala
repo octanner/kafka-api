@@ -71,7 +71,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     adminClient.close()
 
     db.withConnection { implicit conn =>
-      SQL"delete from permissions;".executeUpdate()
+      SQL"delete from acl;".executeUpdate()
     }
   }
 
@@ -79,7 +79,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     db.withTransaction { implicit conn =>
       SQL"""
             delete from acl_source;
-            delete from permissions;
+            delete from acl;
             delete from topic;
          """.executeUpdate()
     }
@@ -103,7 +103,16 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
   private def entriesWithRoleInDb(role: String): Int = {
     db.withConnection { implicit conn =>
-      SQL"SELECT count(*) FROM permissions WHERE role = $role".as(SqlParser.scalar[Int].single)
+      SQL"SELECT count(*) FROM acl WHERE role = $role".as(SqlParser.scalar[Int].single)
+    }
+  }
+
+  private def getAclId(cluster: String, aclRequest: AclRequest) = {
+    db.withConnection { implicit conn =>
+      val userId = dao.getUserIdByName(cluster, aclRequest.user)
+      val topicId = dao.getTopicIdByName(cluster, aclRequest.topic)
+      val role = aclRequest.role.name
+      SQL"SELECT acl_id FROM acl WHERE cluster = $cluster AND topic_id = $topicId AND role = $role AND user_id = $userId".as(dao.stringParser.single)
     }
   }
 
@@ -127,9 +136,11 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val aclRequest = AclRequest(topic.name, username, role)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
       val result = futureResult.futureValue
+      val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
 
-      Status(result.status) mustBe NoContent
+      Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.name) mustBe 1
+      result.body mustBe expectedJson
       aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 1
     }
 
@@ -138,9 +149,11 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val aclRequest = AclRequest(topic.name, username, role)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
       val result = futureResult.futureValue
+      val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
 
-      Status(result.status) mustBe NoContent
+      Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.name) mustBe 1
+      result.body mustBe expectedJson
       aclExistsInKafka(username, topic.name, AclOperation.READ).size() mustEqual 1
     }
 

@@ -26,7 +26,7 @@ class AclDao {
     val role = aclRequest.role
     SQL"""
           INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, ${role.name}, $cluster);
-       """.executeUpdate()
+       """.executeInsert(stringParser.single)
   }
 
   def getUserIdByName(cluster: String, username: String)(implicit conn: Connection): Option[String] = {
