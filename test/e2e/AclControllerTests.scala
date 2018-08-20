@@ -44,7 +44,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     db.withTransaction { implicit conn =>
       SQL"""
             insert into topic (cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
-            ($cluster, ${topic.name}, 1, 1, 888888, 'delete');
+            ($cluster, ${topic.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
 
             insert into acl_source (username, password, cluster, claimed) values ($username, $password, $cluster, false);
          """.executeUpdate()
