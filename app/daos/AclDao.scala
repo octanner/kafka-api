@@ -23,9 +23,10 @@ class AclDao {
   def addPermissionToDb(cluster: String, aclRequest: AclRequest)(implicit conn: Connection) = {
     val topicId = getTopicIdByName(cluster, aclRequest.topic).getOrElse(throw new IllegalArgumentException(s"Topic '${aclRequest.topic}' not found in cluster '$cluster'"))
     val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username '${aclRequest.user}' not claimed in cluster '$cluster'"))
-    val role = aclRequest.role
+    val role = aclRequest.role.name
     SQL"""
-          INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, ${role.name}, $cluster);
+          INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, $role, $cluster)
+          ON CONFLICT ON CONSTRAINT acl_unique DO UPDATE SET topic_id = acl.topic_id;
        """.executeInsert(stringParser.single)
   }
 

@@ -144,6 +144,33 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 1
     }
 
+    "return same id for repeat permission request" in {
+      val role = AclRoleEnum.PRODUCER
+      val aclRequest = AclRequest(topic.name, username, role)
+
+      val aclId =
+        db.withConnection { implicit conn =>
+          val userId = dao.getUserIdByName(cluster, username)
+          val topicId = dao.getTopicIdByName(cluster, topic.name)
+          val roleName = role.name
+          SQL"""
+                INSERT INTO acl (user_id, topic_id, role, cluster) VALUES
+                ($userId, $topicId, $roleName, $cluster);
+           """.executeInsert(dao.stringParser.single)
+        }
+
+      entriesWithRoleInDb(role.name) mustBe 1
+
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
+      val result = futureResult.futureValue
+      val expectedJson = Json.obj("id" -> aclId).toString
+
+      Status(result.status) mustBe Ok
+      entriesWithRoleInDb(role.name) mustBe 1
+      result.body mustBe expectedJson
+      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 1
+    }
+
     "allow user read access for topic" in {
       val role = AclRoleEnum.CONSUMER
       val aclRequest = AclRequest(topic.name, username, role)
