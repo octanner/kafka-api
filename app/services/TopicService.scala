@@ -102,14 +102,8 @@ class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration, 
 }
 
 object TopicService {
-  val ADMIN_CLIENT_ID = "kafka-api"
   val DEFAULT_PARTITIONS_CONFIG = ".kafka.topic.default.partitions"
   val DEFAULT_REPLICAS_CONFIG = ".kafka.topic.default.replicas"
   val DEFAULT_RETENTION_CONFIG = ".kafka.topic.default.retention.ms"
-  val KAFKA_LOCATION_CONFIG = ".kafka.location"
-  val KAFKA_SECURITY_PROTOCOL_CONFIG = ".kafka.security.protocol"
-  val KAFKA_SASL_MECHANISM_CONFIG = ".kafka.sasl.mechanism"
-  val KAFKA_ADMIN_USERNAME_CONFIG = ".kafka.admin.username"
-  val KAFKA_ADMIN_PASSWORD_CONFIG = ".kafka.admin.password"
   val PSQL_UNIQUE_VIOLATION_CODE = "23505"
 }

@@ -15,8 +15,8 @@ import play.api.inject.bind
 import play.api.inject.guice.GuiceableModule
 import play.api.libs.json.Json
 import play.api.{ Configuration, Logger }
-import services.TopicService
-import services.TopicService.ADMIN_CLIENT_ID
+import utils.AdminClientUtil
+import utils.AdminClientUtil.ADMIN_CLIENT_ID
 
 class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with EmbeddedKafka {
   val dao = new TopicDao()
@@ -52,7 +52,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
   }
 
   private def topicExistsInKafka(topicName: String): Boolean = {
-    val kafkaHostName = conf.get[String](cluster.toLowerCase + TopicService.KAFKA_LOCATION_CONFIG)
+    val kafkaHostName = conf.get[String](cluster.toLowerCase + AdminClientUtil.KAFKA_LOCATION_CONFIG)
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)

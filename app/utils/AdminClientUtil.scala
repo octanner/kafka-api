@@ -7,10 +7,9 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig }
 import org.apache.kafka.common.config.SaslConfigs
 import play.api.{ Configuration, Logger }
-import services.TopicService
 
 class AdminClientUtil @Inject() (conf: Configuration) {
-  import TopicService._
+  import AdminClientUtil._
 
   val logger = Logger(this.getClass)
 
@@ -41,4 +40,13 @@ class AdminClientUtil @Inject() (conf: Configuration) {
     AdminClient.create(props)
   }
 
+}
+
+object AdminClientUtil {
+  val ADMIN_CLIENT_ID = "kafka-api"
+  val KAFKA_LOCATION_CONFIG = ".kafka.location"
+  val KAFKA_SECURITY_PROTOCOL_CONFIG = ".kafka.security.protocol"
+  val KAFKA_SASL_MECHANISM_CONFIG = ".kafka.sasl.mechanism"
+  val KAFKA_ADMIN_USERNAME_CONFIG = ".kafka.admin.username"
+  val KAFKA_ADMIN_PASSWORD_CONFIG = ".kafka.admin.password"
 }
