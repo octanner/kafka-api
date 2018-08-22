@@ -15,6 +15,6 @@ object AclRole extends Enumeration {
   implicit val enumReads: Reads[AclRole] = EnumUtils.enumReads(AclRole)
   implicit def enumWrites: Writes[AclRole] = EnumUtils.enumWrites
 
-  val Producer = Val("WRITE")
-  val Consumer = Val("READ")
+  val PRODUCER = Val("WRITE")
+  val CONSUMER = Val("READ")
 }

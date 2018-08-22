@@ -132,9 +132,10 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
 
     "allow user write access for topic" in {
-      val role = AclRole.Producer
+      val role = AclRole.PRODUCER
       val aclRequest = AclRequest(topic.name, username, role)
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
       val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
 
@@ -145,14 +146,15 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
 
     "return same id for repeat permission request" in {
-      val role = AclRole.Producer
+      val role = AclRole.PRODUCER
       val roleName = role.role
       val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
       val aclId = db.withConnection { implicit conn => dao.addPermissionToDb(cluster, aclRequest) }
 
       entriesWithRoleInDb(roleName) mustBe 1
 
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
       val expectedJson = Json.obj("id" -> aclId).toString
 
@@ -163,9 +165,11 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
 
     "allow user read access for topic" in {
-      val role = AclRole.Consumer
+      val role = AclRole.CONSUMER
       val aclRequest = AclRequest(topic.name, username, role)
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "consumer")
+
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
       val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
 
@@ -192,7 +196,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
 
     "fail to grant permissions for unknown username" in {
-      val role = AclRole.Consumer
+      val role = AclRole.CONSUMER
       val username = "badUsername"
       val aclRequest = AclRequest(topic.name, username, role)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
@@ -205,7 +209,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
 
     "fail to grant permissions for unknown topic" in {
-      val role = AclRole.Consumer
+      val role = AclRole.CONSUMER
       val topicName = "badTopicName"
       val aclRequest = AclRequest(topicName, username, role)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
