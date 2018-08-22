@@ -5,7 +5,7 @@ import java.util.Properties
 import anorm._
 import daos.AclDao
 import models.AclRole
-import models.Models.{Topic, TopicConfiguration}
+import models.Models.{AclCredentials, Topic, TopicConfiguration}
 import models.http.HttpModels.AclRequest
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
@@ -29,7 +29,9 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   val dao = new AclDao()
   val cluster = "test"
   val username = "testusername"
+  val username2 = "testusername1"
   val password = "testpassword"
+  val password2 = "testpassword1"
   val topic = Topic("test.some.topic", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
   var conf: Configuration = _
 
@@ -47,6 +49,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
             ($cluster, ${topic.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
 
             insert into acl_source (username, password, cluster, claimed) values ($username, $password, $cluster, false);
+            insert into acl_source (username, password, cluster, claimed) values ($username2, $password2, $cluster, false);
          """.executeUpdate()
     }
 
@@ -221,5 +224,26 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       aclExistsInKafka(username, topicName, AclOperation.ANY).size() mustEqual 0
     }
 
+  }
+
+  "AclController #getCredentials" must {
+    "return Ok with credentials when the user is claimed" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username").get().futureValue
+      println(s"${result.status}; Result body: ${result.body}")
+      Status(result.status) mustBe Ok
+      result.json.as[AclCredentials] mustBe AclCredentials(username, password)
+    }
+
+    "return Bad Request when the user is unclaimed" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username2").get().futureValue
+      println(s"${result.status}; Result body: ${result.body}")
+      Status(result.status) mustBe BadRequest
+    }
+
+    "return Bad Request when the user does not exist" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/nonexistinguser").get().futureValue
+      println(s"${result.status}; Result body: ${result.body}")
+      Status(result.status) mustBe BadRequest
+    }
   }
 }

@@ -9,6 +9,7 @@ import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, Resource
 import play.api.Logger
 import play.api.db.Database
 import utils.AdminClientUtil
+import utils.Exceptions.InvalidUserException
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -18,6 +19,20 @@ import scala.util.{ Failure, Success, Try }
 class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
 
   val logger = Logger(this.getClass)
+
+  def getCredentials(cluster: String, user: String) = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getCredentials(cluster, user) match {
+          case Some(credentials) => credentials
+          case None =>
+            logger.error(s"Failed to get credentials for cluster $cluster and user $user. " +
+              s"Either user name does not exist or it is not claimed")
+            throw InvalidUserException(s"Either user $user does not exist in cluster $cluster or the user is not claimed.")
+        }
+      }
+    }
+  }
 
   def claimAcl(cluster: String) = {
     Future {
