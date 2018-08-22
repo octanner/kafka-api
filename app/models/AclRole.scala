@@ -1,8 +1,8 @@
-package models;
+package models
 
 import org.apache.kafka.common.acl.AclOperation
 import play.api.libs.json.{ Reads, Writes }
-import utils.EnumUtils;
+import utils.EnumUtils
 
 object AclRole extends Enumeration {
   type AclRole = Value

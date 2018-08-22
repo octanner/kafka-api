@@ -71,16 +71,16 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     adminClient.close()
 
     db.withConnection { implicit conn =>
-      SQL"delete from acl;".executeUpdate()
+      SQL"DELETE FROM acl;".executeUpdate()
     }
   }
 
   override def afterAll(): Unit = {
     db.withTransaction { implicit conn =>
       SQL"""
-            delete from acl_source;
-            delete from acl;
-            delete from topic;
+            DELETE FROM acl_source;
+            DELETE FROM acl;
+            DELETE FROM topic;
          """.executeUpdate()
     }
     EmbeddedKafka.stop()
@@ -146,19 +146,9 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     "return same id for repeat permission request" in {
       val role = AclRole.Producer
-      val aclRequest = AclRequest(topic.name, username, role)
       val roleName = role.role
-
-      val aclId =
-        db.withConnection { implicit conn =>
-          val userId = dao.getUserIdByName(cluster, username)
-          val topicId = dao.getTopicIdByName(cluster, topic.name)
-
-          SQL"""
-                INSERT INTO acl (user_id, topic_id, role, cluster) VALUES
-                ($userId, $topicId, $roleName, $cluster);
-           """.executeInsert(dao.stringParser.single)
-        }
+      val aclRequest = AclRequest(topic.name, username, role)
+      val aclId = db.withConnection { implicit conn => dao.addPermissionToDb(cluster, aclRequest) }
 
       entriesWithRoleInDb(roleName) mustBe 1
 
