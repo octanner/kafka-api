@@ -104,6 +104,21 @@ class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration) 
     topicCreationResult
   }
 
+  def getTopic(topicName: String): Future[Option[Topic]] = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getTopicInfo(topicName)
+      }
+    }
+  }
+
+  def getAllTopics: Future[Seq[Topic]] = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getAllTopics
+      }
+    }
+  }
 }
 
 object TopicService {
