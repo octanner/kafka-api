@@ -7,6 +7,8 @@ import play.api.libs.json._
 object Models {
   case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
   case class Topic(name: String, description: String, organization: String, config: TopicConfiguration)
+  case class AclCredentials(username: String, password: String)
+  case class Acl(credentials: AclCredentials, cluster: String, role: String)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "cleanup.policy").readNullable[String] and
@@ -24,4 +26,6 @@ object Models {
 
   implicit val topicConfigFormat: Format[TopicConfiguration] = Format(topicConfigReads, topicConfigWrites)
   implicit val topicFormat: Format[Topic] = Json.format[Topic]
+  implicit val aclCredentialsFormat: Format[AclCredentials] = Json.format[AclCredentials]
+  implicit val aclFormat: Format[Acl] = Json.format[Acl]
 }

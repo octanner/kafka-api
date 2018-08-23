@@ -15,8 +15,8 @@ import play.api.inject.bind
 import play.api.inject.guice.GuiceableModule
 import play.api.libs.json.Json
 import play.api.{ Configuration, Logger }
-import services.TopicService
-import services.TopicService.ADMIN_CLIENT_ID
+import utils.AdminClientUtil
+import utils.AdminClientUtil.ADMIN_CLIENT_ID
 
 class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with EmbeddedKafka {
   val dao = new TopicDao()
@@ -37,8 +37,9 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
 
   override def afterAll(): Unit = {
     db.withTransaction { implicit conn =>
-      SQL"""delete from TOPIC;
-         """.execute()
+      SQL"""
+           delete from TOPIC;
+        """.execute()
     }
     EmbeddedKafka.stop()
     super.afterAll()
@@ -51,7 +52,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
   }
 
   private def topicExistsInKafka(topicName: String): Boolean = {
-    val kafkaHostName = conf.get[String](cluster.toLowerCase + TopicService.KAFKA_LOCATION_CONFIG)
+    val kafkaHostName = conf.get[String](cluster.toLowerCase + AdminClientUtil.KAFKA_LOCATION_CONFIG)
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
@@ -80,19 +81,19 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Embe
     "get a list of all topics" in {
       val futureResult = wsUrl(s"/v1/kafka/topics").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic))).toString
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic)))
 
       Status(result.status) mustBe Ok
-      result.body mustBe expectedJson
+      result.json mustBe expectedJson
     }
 
     "get a single topic by name" in {
       val futureResult = wsUrl(s"/v1/kafka/topics/${topic.name}").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.toJson(TopicResponse(topic)).toString
+      val expectedJson = Json.toJson(TopicResponse(topic))
 
       Status(result.status) mustBe Ok
-      result.body mustBe expectedJson
+      result.json mustBe expectedJson
     }
 
     "return 404 if no topic found by given name" in {
