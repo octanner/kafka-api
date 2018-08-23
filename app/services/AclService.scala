@@ -82,12 +82,14 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val topicName = aclRequest.topic
     val username = aclRequest.user
     val role = aclRequest.role.operation
-    val resourcePattern = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL)
-    val accessControlEntry = new AccessControlEntry(s"User:$username", topicName, role, AclPermissionType.ALLOW)
-    val aclBinding = new AclBinding(resourcePattern, accessControlEntry)
+    val topicResourcePattern = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL)
+    val groupResourcePattern = new ResourcePattern(ResourceType.GROUP, "*", PatternType.LITERAL)
+    val accessControlEntry = new AccessControlEntry(s"User:$username", "*", role, AclPermissionType.ALLOW)
+    val topicAclBinding = new AclBinding(topicResourcePattern, accessControlEntry)
+    val groupAclBinding = new AclBinding(groupResourcePattern, accessControlEntry)
 
     val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = Try(adminClient.createAcls(List(aclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
     adminClient.close()
     aclCreationResponse.get
   }
