@@ -24,6 +24,10 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     processRequest[AclRequest](createPermissions(cluster))
   }
 
+  def getCredentials(cluster: String, user: String) = Action.async { implicit request =>
+    service.getCredentials(cluster, user).map { credentials => Ok(Json.toJson(credentials)) }
+  }
+
   private def createPermissions(cluster: String)(aclRequest: AclRequest): Future[Result] = {
     Try(service.createPermissions(cluster, aclRequest)) match {
       case Success(id)                          => Future(Ok(Json.obj("id" -> id)))

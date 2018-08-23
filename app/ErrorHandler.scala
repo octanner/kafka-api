@@ -40,6 +40,8 @@ class ErrorHandler extends HttpErrorHandler {
       case e: InvalidReplicationFactorException =>
         logger.error(e.getMessage, e)
         BadRequest(Json.toJson(createErrorResponse("Invalid Topic Replicas", e.getMessage)))
+      case e: InvalidUserException =>
+        BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: Exception =>
         val message = "A server error occurred: " + exception.getMessage
         logger.error(message, e)
