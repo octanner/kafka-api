@@ -180,6 +180,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1
+      result.body mustBe expectedJson
       // Acl should be created for topic and group
       aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
@@ -281,7 +282,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       val result = wsUrl(s"/v1/kafka/acls/$aclId").delete().futureValue
       Status(result.status) mustBe Ok
-      aclExistsInKafka(username, aclRequest.topic, AclOperation.WRITE).size() mustEqual 0
+      aclExistsInKafka(username, role.operation).size() mustEqual 0
       db.withConnection{ implicit conn => dao.getAcl(aclId) } mustBe None
     }
 
@@ -294,7 +295,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       val result = wsUrl(s"/v1/kafka/acls/$aclId").delete().futureValue
       Status(result.status) mustBe Ok
-      aclExistsInKafka(username, aclRequest.topic, AclOperation.READ).size() mustEqual 0
+      aclExistsInKafka(username, role.operation).size() mustEqual 0
       db.withConnection{ implicit conn => dao.getAcl(aclId) } mustBe None
     }
 

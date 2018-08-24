@@ -54,7 +54,6 @@ class AclDao {
           SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic;
       """.as(stringParser.singleOpt)
   }
-
   def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
     SQL"""
           SELECT acl.acl_id, acl_source.username, acl.role
@@ -62,7 +61,7 @@ class AclDao {
           INNER JOIN acl_source ON acl.user_id = acl_source.user_id
           INNER JOIN topic ON acl.topic_id = topic.topic_id
           WHERE acl.cluster = $cluster AND topic.topic = $topic;
-      """.as(AclParser.*)
+      """.as(aclIdUserRoleParser.*)
   }
 
   def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
@@ -94,4 +93,10 @@ object AclDao {
         val aclRole = AclRole.get(role).getOrElse(throw InvalidAclRoleException(s"role `$role` for ACL is not valid"))
         Acl(user, topicName, cluster, aclRole)
     }
+
+  implicit val aclRoleParser: Column[AclRole] = Column.nonNull { (value, _) =>
+    value match {
+      case role: String => Right(AclRole.get(role).getOrElse(throw InvalidAclRoleException(s"role `$role` for ACL is not valid")))
+    }
+  }
 }

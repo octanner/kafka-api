@@ -11,10 +11,6 @@ object AclRole extends Enumeration {
     def operation: AclOperation = AclOperation.fromString(role)
   }
 
-  def withVal(v: String) = {
-    values.find(_.operation == Val(v).operation)
-  }
-
   implicit def valueToAclRoleVal(x: Value): Val = x.asInstanceOf[Val]
   implicit val enumReads: Reads[AclRole] = EnumUtils.enumReads(AclRole)
   implicit def enumWrites: Writes[AclRole] = EnumUtils.enumWrites
