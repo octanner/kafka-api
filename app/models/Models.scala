@@ -10,6 +10,7 @@ object Models {
   case class Topic(name: String, description: String, organization: String, config: TopicConfiguration)
   case class AclCredentials(username: String, password: String)
   case class Acl(user: String, topicName: String, cluster: String, role: AclRole)
+  case class AclIdUserRole(id: String, user: String, role: AclRole)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "cleanup.policy").readNullable[String] and
@@ -29,4 +30,5 @@ object Models {
   implicit val topicFormat: Format[Topic] = Json.format[Topic]
   implicit val aclCredentialsFormat: Format[AclCredentials] = Json.format[AclCredentials]
   implicit val aclFormat: Format[Acl] = Json.format[Acl]
+  implicit val aclIdUserRoleFormat: Format[AclIdUserRole] = Json.format[AclIdUserRole]
 }

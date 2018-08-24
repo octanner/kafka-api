@@ -35,6 +35,14 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     }
   }
 
+  def getAclsByTopic(cluster: String, topic: String) = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getAclsForTopic(cluster, topic)
+      }
+    }
+  }
+
   def claimAcl(cluster: String) = {
     Future {
       db.withTransaction { implicit conn =>
@@ -80,14 +88,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
   }
 
   def createKafkaAcl(cluster: String, aclRequest: AclRequest) = {
-    val topicName = aclRequest.topic
-    val username = aclRequest.user
-    val role = aclRequest.role.operation
-    val topicResourcePattern = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL)
-    val groupResourcePattern = new ResourcePattern(ResourceType.GROUP, "*", PatternType.LITERAL)
-    val accessControlEntry = new AccessControlEntry(s"User:$username", "*", role, AclPermissionType.ALLOW)
-    val topicAclBinding = new AclBinding(topicResourcePattern, accessControlEntry)
-    val groupAclBinding = new AclBinding(groupResourcePattern, accessControlEntry)
+    val topicAclBinding = createAclBinding(aclRequest, ResourceType.TOPIC, aclRequest.topic, host = "*")
+    val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = "*", host = "*")
 
     val adminClient = util.getAdminClient(cluster)
     val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
@@ -128,5 +130,13 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
     adminClient.close()
     aclCreationResponse.get
+  }
+
+  private def createAclBinding(aclRequest: AclRequest, resourceType: ResourceType, resourceName: String, host: String) = {
+    val username = aclRequest.user
+    val role = aclRequest.role.operation
+    val resourcePattern = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
+    val accessControlEntry = new AccessControlEntry(s"User:$username", host, role, AclPermissionType.ALLOW)
+    new AclBinding(resourcePattern, accessControlEntry)
   }
 }

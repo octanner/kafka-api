@@ -5,7 +5,7 @@ import java.util.Properties
 import anorm._
 import daos.AclDao
 import models.AclRole
-import models.Models.{AclCredentials, Topic, TopicConfiguration}
+import models.Models.{AclCredentials, AclIdUserRole, Topic, TopicConfiguration}
 import models.http.HttpModels.{AclRequest, AclResponse}
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
@@ -90,7 +90,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     super.afterAll()
   }
 
-  private def aclExistsInKafka(user: String, topicName: String, operation: AclOperation) = {
+  private def aclExistsInKafka(user: String, operation: AclOperation) = {
     val kafkaHostName = conf.get[String](cluster.toLowerCase + AdminClientUtil.KAFKA_LOCATION_CONFIG)
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
@@ -110,7 +110,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
   }
 
-  private def getAclId(cluster: String, aclRequest: AclRequest) = {
+  private def getAclId(aclRequest: AclRequest) = {
     db.withConnection { implicit conn =>
       val userId = dao.getUserIdByName(cluster, aclRequest.user)
       val topicId = dao.getTopicIdByName(cluster, aclRequest.topic)
@@ -140,13 +140,13 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
+      val expectedJson = Json.obj("id" -> getAclId(aclRequest)).toString
 
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
 
     "return same id for repeat permission request" in {
@@ -166,7 +166,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       entriesWithRoleInDb(roleName) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
 
     "allow user read access for topic" in {
@@ -176,13 +176,12 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("id" -> getAclId(cluster, aclRequest)).toString
+      val expectedJson = Json.obj("id" -> getAclId(aclRequest)).toString
 
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1
-      result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, topic.name, AclOperation.READ).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
 
     "fail to grant permissions for unknown role" in {
@@ -198,7 +197,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       println(s"Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
       entriesWithRoleInDb(role) mustBe 0
-      aclExistsInKafka(username, topic.name, AclOperation.ANY).size() mustEqual 0
+      aclExistsInKafka(username, AclOperation.ANY).size() mustEqual 0
     }
 
     "fail to grant permissions for unknown username" in {
@@ -211,7 +210,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       println(s"Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
       entriesWithRoleInDb(role.role) mustBe 0
-      aclExistsInKafka(username, topic.name, AclOperation.ANY).size() mustEqual 0
+      aclExistsInKafka(username, AclOperation.ANY).size() mustEqual 0
     }
 
     "fail to grant permissions for unknown topic" in {
@@ -224,7 +223,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       println(s"Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
       entriesWithRoleInDb(role.role) mustBe 0
-      aclExistsInKafka(username, topicName, AclOperation.ANY).size() mustEqual 0
+      aclExistsInKafka(username, AclOperation.ANY).size() mustEqual 0
     }
 
   }
@@ -247,6 +246,27 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/nonexistinguser").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
+    }
+  }
+
+  "AclController #getUsersForTopic" must {
+    "return list of users for a topic" in {
+      val aclId1 = db.withConnection { implicit conn =>
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER))
+      }
+      val aclId2 = db.withConnection { implicit conn =>
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.PRODUCER))
+      }
+
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/acls?topic=${topic.name}").get().futureValue
+      val expectedJson = Json.obj("acls" -> Json.toJson(List(
+        AclIdUserRole(aclId1, username, AclRole.CONSUMER),
+        AclIdUserRole(aclId2, username, AclRole.PRODUCER)
+      )))
+
+      println(s"${result.status}; Result body: ${result.body}")
+      Status(result.status) mustBe Ok
+      result.json mustBe expectedJson
     }
   }
 

@@ -3,6 +3,9 @@ package daos
 import java.sql.Connection
 
 import anorm._
+import models.AclRole
+import models.AclRole.AclRole
+import models.Models.{ AclIdUserRole, AclCredentials }
 import anorm.SqlParser._
 import models.AclRole
 import models.Models.{ Acl, AclCredentials }
@@ -27,7 +30,7 @@ class AclDao {
   def claimAcl(cluster: String, username: String)(implicit conn: Connection) = {
     SQL"""
           UPDATE acl_source SET claimed = TRUE, claimed_timestamp = now() WHERE cluster = $cluster AND username = $username;
-       """.executeUpdate()
+      """.executeUpdate()
   }
 
   def addPermissionToDb(cluster: String, aclRequest: AclRequest)(implicit conn: Connection) = {
@@ -37,7 +40,7 @@ class AclDao {
     SQL"""
           INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, $role, $cluster)
           ON CONFLICT ON CONSTRAINT acl_unique DO UPDATE SET topic_id = acl.topic_id;
-       """.executeInsert(stringParser.single)
+      """.executeInsert(stringParser.single)
   }
 
   def getUserIdByName(cluster: String, username: String)(implicit conn: Connection): Option[String] = {
@@ -50,6 +53,16 @@ class AclDao {
     SQL"""
           SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic;
       """.as(stringParser.singleOpt)
+  }
+
+  def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
+    SQL"""
+          SELECT acl.acl_id, acl_source.username, acl.role
+          FROM acl
+          INNER JOIN acl_source ON acl.user_id = acl_source.user_id
+          INNER JOIN topic ON acl.topic_id = topic.topic_id
+          WHERE acl.cluster = $cluster AND topic.topic = $topic;
+      """.as(AclParser.*)
   }
 
   def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
@@ -69,6 +82,8 @@ class AclDao {
   }
 
   implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password")
+  implicit val aclRequestParser = Macro.parser[AclRequest]("topic", "username", "role")
+  implicit val aclIdUserRoleParser = Macro.parser[AclIdUserRole]("acl_id", "username", "role")
   implicit val stringParser = SqlParser.scalar[String]
 }
 
