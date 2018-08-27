@@ -9,7 +9,7 @@ object Models {
   case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
   case class Topic(name: String, description: String, organization: String, config: TopicConfiguration)
   case class AclCredentials(username: String, password: String)
-  case class Acl(user: String, topicName: String, cluster: String, role: AclRole)
+  case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "cleanup.policy").readNullable[String] and

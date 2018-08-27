@@ -28,6 +28,9 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     service.getCredentials(cluster, user).map { credentials => Ok(Json.toJson(credentials)) }
   }
 
+  def getAclsForTopic(cluster: String, topic: String) = Action.async { implicit request =>
+    service.getAclsByTopic(cluster, topic).map { acls => Ok(Json.obj("acls" -> acls)) }
+  }
   def deleteAcl(id: String) = Action.async { implicit request =>
     service.deleteAcl(id).map { _ => Ok }
   }
