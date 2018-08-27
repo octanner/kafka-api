@@ -51,6 +51,7 @@ class AclDao {
           SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic;
       """.as(stringParser.singleOpt)
   }
+
   def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
     SQL"""
           SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role
