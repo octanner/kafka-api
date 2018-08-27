@@ -1,5 +1,7 @@
 package services
 
+import java.util.concurrent.TimeUnit
+
 import daos.AclDao
 import javax.inject.Inject
 import models.Models.Acl
@@ -90,7 +92,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val groupAclBinding = new AclBinding(groupResourcePattern, accessControlEntry)
 
     val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
     adminClient.close()
     aclCreationResponse.get
   }
@@ -124,8 +127,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val groupAclBinding = new AclBindingFilter(groupResourcePattern, accessControlEntry)
 
     val adminClient = util.getAdminClient(acl.cluster)
-    //    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
-    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
     adminClient.close()
     aclCreationResponse.get
   }
