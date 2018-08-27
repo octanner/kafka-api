@@ -119,14 +119,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
   }
 
   def deleteKafkaAcl(acl: Acl) = {
-    val topicName = acl.topic
-    val username = acl.user
-    val role = acl.role.operation
-    val topicResourcePattern = new ResourcePatternFilter(ResourceType.TOPIC, topicName, PatternType.LITERAL)
-    val groupResourcePattern = new ResourcePatternFilter(ResourceType.GROUP, "*", PatternType.LITERAL)
-    val accessControlEntry = new AccessControlEntryFilter(s"User:$username", "*", role, AclPermissionType.ALLOW)
-    val topicAclBinding = new AclBindingFilter(topicResourcePattern, accessControlEntry)
-    val groupAclBinding = new AclBindingFilter(groupResourcePattern, accessControlEntry)
+    val topicAclBinding = createAclBindingFilter(acl, ResourceType.TOPIC, acl.topic, host = "*")
+    val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = "*", host = "*")
 
     val adminClient = util.getAdminClient(acl.cluster)
     val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
@@ -141,5 +135,13 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val resourcePattern = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
     val accessControlEntry = new AccessControlEntry(s"User:$username", host, role, AclPermissionType.ALLOW)
     new AclBinding(resourcePattern, accessControlEntry)
+  }
+
+  private def createAclBindingFilter(acl: Acl, resourceType: ResourceType, resourceName: String, host: String) = {
+    val username = acl.user
+    val role = acl.role.operation
+    val resourcePattern = new ResourcePatternFilter(resourceType, resourceName, PatternType.LITERAL)
+    val accessControlEntry = new AccessControlEntryFilter(s"User:$username", host, role, AclPermissionType.ALLOW)
+    new AclBindingFilter(resourcePattern, accessControlEntry)
   }
 }
