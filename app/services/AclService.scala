@@ -105,7 +105,7 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
             logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
               s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka")
           case Failure(e) =>
-            logger.error(s"Unable to add permission for '${acl.user}' with role '${acl.role.role}' " +
+            logger.error(s"Unable to delete permission for '${acl.user}' with role '${acl.role.role}' " +
               s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka", e)
             throw e
         }
