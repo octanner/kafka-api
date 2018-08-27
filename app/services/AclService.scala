@@ -1,5 +1,7 @@
 package services
 
+import java.util.concurrent.TimeUnit
+
 import daos.AclDao
 import javax.inject.Inject
 import models.Models.Acl
@@ -92,7 +94,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = "*", host = "*")
 
     val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
     adminClient.close()
     aclCreationResponse.get
   }
@@ -107,7 +110,7 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
             logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
               s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka")
           case Failure(e) =>
-            logger.error(s"Unable to add permission for '${acl.user}' with role '${acl.role.role}' " +
+            logger.error(s"Unable to delete permission for '${acl.user}' with role '${acl.role.role}' " +
               s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka", e)
             throw e
         }
@@ -126,8 +129,8 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val groupAclBinding = new AclBindingFilter(groupResourcePattern, accessControlEntry)
 
     val adminClient = util.getAdminClient(acl.cluster)
-    //    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
-    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
     adminClient.close()
     aclCreationResponse.get
   }

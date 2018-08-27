@@ -3,12 +3,10 @@ package daos
 import java.sql.Connection
 
 import anorm._
-import models.AclRole
-import models.AclRole.AclRole
-import models.Models.{ AclIdUserRole, AclCredentials }
 import anorm.SqlParser._
 import models.AclRole
-import models.Models.{ Acl, AclCredentials }
+import models.AclRole.AclRole
+import models.Models.{ Acl, AclIdUserRole, AclCredentials }
 import models.http.HttpModels.AclRequest
 import utils.Exceptions.InvalidAclRoleException
 
@@ -54,15 +52,6 @@ class AclDao {
           SELECT topic_id FROM topic WHERE cluster = $cluster AND topic = $topic;
       """.as(stringParser.singleOpt)
   }
-  def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
-    SQL"""
-          SELECT acl.acl_id, acl_source.username, acl.role
-          FROM acl
-          INNER JOIN acl_source ON acl.user_id = acl_source.user_id
-          INNER JOIN topic ON acl.topic_id = topic.topic_id
-          WHERE acl.cluster = $cluster AND topic.topic = $topic;
-      """.as(aclIdUserRoleParser.*)
-  }
 
   def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
     SQL"""
@@ -72,6 +61,16 @@ class AclDao {
                  acl.topic_id = topic.topic_id AND
                  acl.acl_id = ${id}
       """.as(AclParser.singleOpt)
+  }
+
+  def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
+    SQL"""
+          SELECT acl.acl_id, acl_source.username, acl.role
+          FROM acl
+          INNER JOIN acl_source ON acl.user_id = acl_source.user_id
+          INNER JOIN topic ON acl.topic_id = topic.topic_id
+          WHERE acl.cluster = $cluster AND topic.topic = $topic;
+      """.as(aclIdUserRoleParser.*)
   }
 
   def deleteAcl(id: String)(implicit conn: Connection) = {
