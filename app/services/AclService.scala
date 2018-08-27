@@ -105,10 +105,10 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
         Try(deleteKafkaAcl(acl)) match {
           case Success(_) =>
             logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
-              s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka")
+              s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka")
           case Failure(e) =>
             logger.error(s"Unable to add permission for '${acl.user}' with role '${acl.role.role}' " +
-              s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka", e)
+              s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka", e)
             throw e
         }
       }
@@ -116,7 +116,7 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
   }
 
   def deleteKafkaAcl(acl: Acl) = {
-    val topicName = acl.topicName
+    val topicName = acl.topic
     val username = acl.user
     val role = acl.role.operation
     val topicResourcePattern = new ResourcePatternFilter(ResourceType.TOPIC, topicName, PatternType.LITERAL)

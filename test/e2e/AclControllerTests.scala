@@ -5,7 +5,7 @@ import java.util.Properties
 import anorm._
 import daos.AclDao
 import models.AclRole
-import models.Models.{AclCredentials, AclIdUserRole, Topic, TopicConfiguration}
+import models.Models.{Acl, AclCredentials, Topic, TopicConfiguration}
 import models.http.HttpModels.{AclRequest, AclResponse}
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
@@ -250,8 +250,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     }
   }
 
-  "AclController #getUsersForTopic" must {
-    "return list of users for a topic" in {
+  "AclController #getAclsForTopic" must {
+    "return list of acls for a topic" in {
       val aclId1 = db.withConnection { implicit conn =>
         dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER))
       }
@@ -261,8 +261,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/acls?topic=${topic.name}").get().futureValue
       val expectedJson = Json.obj("acls" -> Json.toJson(List(
-        AclIdUserRole(aclId1, username, AclRole.CONSUMER),
-        AclIdUserRole(aclId2, username, AclRole.PRODUCER)
+        Acl(aclId1, username, topic.name, cluster, AclRole.CONSUMER),
+        Acl(aclId2, username, topic.name, cluster, AclRole.PRODUCER)
       )))
 
       println(s"${result.status}; Result body: ${result.body}")
