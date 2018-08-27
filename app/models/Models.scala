@@ -30,4 +30,5 @@ object Models {
   implicit val topicFormat: Format[Topic] = Json.format[Topic]
   implicit val aclCredentialsFormat: Format[AclCredentials] = Json.format[AclCredentials]
   implicit val aclFormat: Format[Acl] = Json.format[Acl]
+  implicit val aclIdUserRoleFormat: Format[AclIdUserRole] = Json.format[AclIdUserRole]
 }

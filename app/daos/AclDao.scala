@@ -80,7 +80,6 @@ class AclDao {
   }
 
   implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password")
-  implicit val aclRequestParser = Macro.parser[AclRequest]("topic", "username", "role")
   implicit val aclIdUserRoleParser = Macro.parser[AclIdUserRole]("acl_id", "username", "role")
   implicit val stringParser = SqlParser.scalar[String]
 }
