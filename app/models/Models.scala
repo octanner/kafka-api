@@ -1,5 +1,6 @@
 package models
 
+import models.AclRole.AclRole
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
@@ -8,7 +9,7 @@ object Models {
   case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
   case class Topic(name: String, description: String, organization: String, config: TopicConfiguration)
   case class AclCredentials(username: String, password: String)
-  case class Acl(credentials: AclCredentials, cluster: String, role: String)
+  case class Acl(user: String, topicName: String, cluster: String, role: AclRole)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "cleanup.policy").readNullable[String] and

@@ -3,10 +3,14 @@ package daos
 import java.sql.Connection
 
 import anorm._
-import models.Models.AclCredentials
+import anorm.SqlParser._
+import models.AclRole
+import models.Models.{ Acl, AclCredentials }
 import models.http.HttpModels.AclRequest
+import utils.Exceptions.InvalidAclRoleException
 
 class AclDao {
+  import AclDao._
 
   def getUnclaimedAcl(cluster: String)(implicit conn: Connection): AclCredentials = {
     SQL"""
@@ -48,7 +52,31 @@ class AclDao {
       """.as(stringParser.singleOpt)
   }
 
+  def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
+    SQL"""
+          SELECT username, topic, acl.cluster as cluster, role
+           FROM acl, topic, acl_source u
+           WHERE acl.user_id = u.user_id AND
+                 acl.topic_id = topic.topic_id AND
+                 acl.acl_id = ${id}
+      """.as(AclParser.singleOpt)
+  }
+
+  def deleteAcl(id: String)(implicit conn: Connection) = {
+    SQL"""
+        DELETE FROM ACL WHERE acl_id = ${id}
+      """.execute()
+  }
+
   implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password")
   implicit val stringParser = SqlParser.scalar[String]
+}
 
+object AclDao {
+  val AclParser: RowParser[Acl] =
+    (str("USERNAME") ~ str("TOPIC") ~ str("CLUSTER") ~ str("ROLE")) map {
+      case user ~ topicName ~ cluster ~ role =>
+        val aclRole = AclRole.get(role).getOrElse(throw InvalidAclRoleException(s"role `$role` for ACL is not valid"))
+        Acl(user, topicName, cluster, aclRole)
+    }
 }

@@ -1,15 +1,18 @@
 package services
 
+import java.util.concurrent.TimeUnit
+
 import daos.AclDao
 import javax.inject.Inject
+import models.Models.Acl
 import models.http.HttpModels.AclRequest
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.InvalidRequestException
-import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, ResourceType }
+import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import play.api.Logger
 import play.api.db.Database
 import utils.AdminClientUtil
-import utils.Exceptions.InvalidUserException
+import utils.Exceptions.{ InvalidUserException, ResourceNotFound }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -89,9 +92,44 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val groupAclBinding = new AclBinding(groupResourcePattern, accessControlEntry)
 
     val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all().get)
+    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
     adminClient.close()
     aclCreationResponse.get
   }
 
+  def deleteAcl(id: String) = {
+    Future {
+      db.withTransaction { implicit conn =>
+        val acl = dao.getAcl(id).getOrElse(throw ResourceNotFound(s"Acl not found for id $id"))
+        dao.deleteAcl(id)
+        Try(deleteKafkaAcl(acl)) match {
+          case Success(_) =>
+            logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
+              s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka")
+          case Failure(e) =>
+            logger.error(s"Unable to delete permission for '${acl.user}' with role '${acl.role.role}' " +
+              s"on topic '${acl.topicName}' in cluster '${acl.cluster}' to Kafka", e)
+            throw e
+        }
+      }
+    }
+  }
+
+  def deleteKafkaAcl(acl: Acl) = {
+    val topicName = acl.topicName
+    val username = acl.user
+    val role = acl.role.operation
+    val topicResourcePattern = new ResourcePatternFilter(ResourceType.TOPIC, topicName, PatternType.LITERAL)
+    val groupResourcePattern = new ResourcePatternFilter(ResourceType.GROUP, "*", PatternType.LITERAL)
+    val accessControlEntry = new AccessControlEntryFilter(s"User:$username", "*", role, AclPermissionType.ALLOW)
+    val topicAclBinding = new AclBindingFilter(topicResourcePattern, accessControlEntry)
+    val groupAclBinding = new AclBindingFilter(groupResourcePattern, accessControlEntry)
+
+    val adminClient = util.getAdminClient(acl.cluster)
+    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+      .get(500, TimeUnit.MILLISECONDS))
+    adminClient.close()
+    aclCreationResponse.get
+  }
 }

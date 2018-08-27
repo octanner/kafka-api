@@ -6,7 +6,7 @@ import anorm._
 import daos.AclDao
 import models.AclRole
 import models.Models.{AclCredentials, Topic, TopicConfiguration}
-import models.http.HttpModels.AclRequest
+import models.http.HttpModels.{AclRequest, AclResponse}
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.acl._
@@ -97,7 +97,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
 
     val adminClient = AdminClient.create(props)
-    val accessControlEntryFilter = new AccessControlEntryFilter(s"User:$user", topicName, operation, AclPermissionType.ALLOW)
+    val accessControlEntryFilter = new AccessControlEntryFilter(s"User:$user", "*", operation, AclPermissionType.ALLOW)
     val aclBindingFilter = new AclBindingFilter(ResourcePatternFilter.ANY, accessControlEntryFilter)
     val acls = Try(adminClient.describeAcls(aclBindingFilter).values.get)
     adminClient.close()
@@ -145,7 +145,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
-      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 1
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 2
     }
 
     "return same id for repeat permission request" in {
@@ -164,7 +165,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(roleName) mustBe 1
       result.body mustBe expectedJson
-      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 1
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, topic.name, AclOperation.WRITE).size() mustEqual 2
     }
 
     "allow user read access for topic" in {
@@ -179,7 +181,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
-      aclExistsInKafka(username, topic.name, AclOperation.READ).size() mustEqual 1
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, topic.name, AclOperation.READ).size() mustEqual 2
     }
 
     "fail to grant permissions for unknown role" in {
@@ -244,6 +247,41 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/nonexistinguser").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
+    }
+  }
+
+  "AclController #delete" must {
+    "return Ok and delete producer acl in kafka and database" in {
+      val role = AclRole.PRODUCER
+      val aclRequest = AclRequest(topic.name, username, role)
+
+      // Create Acl
+      val create = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest)).futureValue
+      val aclId = (create.json \ "id").as[String]
+
+      val result = wsUrl(s"/v1/kafka/acls/$aclId").delete().futureValue
+      Status(result.status) mustBe Ok
+      aclExistsInKafka(username, aclRequest.topic, AclOperation.WRITE).size() mustEqual 0
+      db.withConnection{ implicit conn => dao.getAcl(aclId) } mustBe None
+    }
+
+    "return Ok and delete consumer acl in kafka and database" in {
+      val role = AclRole.CONSUMER
+      val aclRequest = AclRequest(topic.name, username, role)
+      // Create Acl
+      val create = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest)).futureValue
+      val aclId = (create.json \ "id").as[String]
+
+      val result = wsUrl(s"/v1/kafka/acls/$aclId").delete().futureValue
+      Status(result.status) mustBe Ok
+      aclExistsInKafka(username, aclRequest.topic, AclOperation.READ).size() mustEqual 0
+      db.withConnection{ implicit conn => dao.getAcl(aclId) } mustBe None
+    }
+
+    "return NotFound when a non existing acl id request is sent" in {
+      val result = wsUrl(s"/v1/kafka/acls/nonexistingid").delete().futureValue
+      Status(result.status) mustBe NotFound
+      println(result.body)
     }
   }
 }

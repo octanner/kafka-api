@@ -15,6 +15,10 @@ object AclRole extends Enumeration {
   implicit val enumReads: Reads[AclRole] = EnumUtils.enumReads(AclRole)
   implicit def enumWrites: Writes[AclRole] = EnumUtils.enumWrites
 
+  def get(role: String): Option[AclRole] = {
+    AclRole.values.find(_.role == role.toUpperCase)
+  }
+
   val PRODUCER = Val("WRITE")
   val CONSUMER = Val("READ")
 }
