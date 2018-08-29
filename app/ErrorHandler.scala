@@ -46,6 +46,10 @@ class ErrorHandler extends HttpErrorHandler {
         BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: ResourceNotFound =>
         NotFound(Json.toJson(createErrorResponse(e.title, e.message)))
+      case e: UndefinedResource =>
+        InternalServerError(Json.toJson(createErrorResponse(e.title, e.message)))
+      case e: ExternalServiceException =>
+        InternalServerError(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: Exception =>
         val message = "A server error occurred: " + exception.getMessage
         logger.error(message, e)

@@ -12,4 +12,7 @@ GET        /v1/kafka/cluster/:cluster/credentials/:user                   contro
 GET        /v1/kafka/cluster/:cluster/acls                                controllers.AclController.getAclsForTopic(cluster: String, topic: String)
 POST       /v1/kafka/cluster/:cluster/user                                controllers.AclController.create(cluster: String)
 POST       /v1/kafka/cluster/:cluster/acls                                controllers.AclController.createAclForTopic(cluster: String)
-DELETE     /v1/kafka/acls/:id                                             controllers.AclController.deleteAcl(id)
+DELETE     /v1/kafka/acls/:id                                             controllers.AclController.deleteAcl(id: String)
+
+GET        /v1/kafka/cluster/:cluster/schemas                             controllers.SchemaController.getSchemas(cluster: String)
+GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions            controllers.SchemaController.getSchemaVersions(cluster: String, schema: String)
