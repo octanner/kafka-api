@@ -10,4 +10,6 @@ object Exceptions {
   case class InvalidUserException(message: String) extends ApplicationException("Invalid User", message)
   case class InvalidAclRoleException(message: String) extends ApplicationException("Invalid Acl Role", message)
   case class ResourceNotFound(message: String) extends ApplicationException("Resource Not Found", message)
+  case class UndefinedResource(message: String) extends ApplicationException("Undefined Resource", message)
+  case class ExternalServiceException(message: String) extends ApplicationException("External Service Failure", message)
 }
