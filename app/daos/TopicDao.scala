@@ -4,7 +4,7 @@ import java.sql.Connection
 
 import anorm._
 import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration }
-import models.http.HttpModels.TopicSchemaMapping
+import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.joda.time.DateTime
 
 class TopicDao {
@@ -42,9 +42,20 @@ class TopicDao {
       .execute()
   }
 
+  def getTopicSchemaMappings(cluster: String, topic: String)(implicit conn: Connection): List[TopicSchemaMapping] = {
+    SQL"""
+        SELECT topic, schema, version
+        FROM TOPIC_SCHEMA_MAPPING tsm INNER JOIN TOPIC t ON tsm.topic_id = t.topic_id
+        WHERE t.topic = $topic AND tsm.cluster = $cluster
+      """
+      .as(topicSchemaMappingParser.*)
+  }
+
   val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"
   val topicColumns = s"topic, description, organization, $topicConfigColumns"
   implicit val topicConfigParser = Macro.parser[TopicConfiguration]("cleanup_policy", "partitions", "retention_ms", "replicas")
   implicit val topicParser = Macro.parser[Topic]("topic", "description", "organization", "cleanup_policy", "partitions", "retention_ms", "replicas")
+  implicit val schemaParser = Macro.parser[SchemaRequest]("schema", "version")
+  implicit val topicSchemaMappingParser = Macro.parser[TopicSchemaMapping]("topic", "schema", "version")
   implicit val basicTopicInfoParser = Macro.parser[BasicTopicInfo]("topic_id", "topic", "cluster")
 }

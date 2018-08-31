@@ -120,6 +120,14 @@ class TopicService @Inject() (
       }
     }
   }
+
+  def getTopicSchemaMappings(cluster: String, topic: String): Future[List[TopicSchemaMapping]] = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getTopicSchemaMappings(cluster, topic)
+      }
+    }
+  }
 }
 
 object TopicService {
