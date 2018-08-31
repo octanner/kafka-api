@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutionException
 import daos.TopicDao
 import javax.inject.Inject
 import models.Models.{ Topic, TopicConfiguration }
+import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.TopicConfig
@@ -13,14 +14,19 @@ import org.postgresql.util.PSQLException
 import play.api.db.Database
 import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
-import utils.Exceptions.NonUniqueTopicNameException
+import utils.Exceptions.{ NonUniqueTopicNameException, ResourceNotFoundException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
-class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration, util: AdminClientUtil) {
+class TopicService @Inject() (
+    db:        Database,
+    dao:       TopicDao,
+    conf:      Configuration,
+    util:      AdminClientUtil,
+    schemaSvc: SchemaRegistryService) {
   import TopicService._
 
   val logger = Logger(this.getClass)
@@ -55,6 +61,21 @@ class TopicService @Inject() (db: Database, dao: TopicDao, conf: Configuration, 
           throw e
       }
     }
+  }
+
+  def createTopicSchemaMapping(cluster: String, mapping: TopicSchemaMapping) = {
+    Future {
+      val topic = db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, mapping.topic) }
+        .getOrElse(throw ResourceNotFoundException(s"Topic `${mapping.topic}` not found in cluster `$cluster`"))
+      for (schema <- schemaSvc.getSchema(cluster, mapping.schema.name, mapping.schema.version)) yield {
+        val validatedSchemaRequest = SchemaRequest(schema.subject, schema.version)
+        db.withTransaction { implicit conn =>
+          dao.upsertTopicSchemaMapping(cluster, topic.id, mapping.copy(schema = validatedSchemaRequest))
+        }
+        mapping
+      }
+
+    }.flatten
   }
 
   private def createTopicInDB(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String) = {
