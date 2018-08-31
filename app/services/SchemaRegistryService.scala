@@ -1,10 +1,16 @@
 package services
 
 import javax.inject.Inject
+<<<<<<< HEAD
 import models.http.HttpModels.SchemaResponse
 import play.api.libs.ws.WSClient
 import play.api.{ Configuration, Logger }
 import utils.Exceptions.{ ExternalServiceException, ResourceNotFoundException, UndefinedResourceException }
+=======
+import play.api.libs.ws.WSClient
+import play.api.{ Configuration, Logger }
+import utils.Exceptions.{ ExternalServiceException, UndefinedResource }
+>>>>>>> master
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
