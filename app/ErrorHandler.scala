@@ -33,30 +33,27 @@ class ErrorHandler extends HttpErrorHandler {
   }
 
   def onServerError(request: RequestHeader, exception: Throwable) = {
+    logger.error(exception.getMessage, exception)
     val status = exception match {
       case e: NonUniqueTopicNameException =>
-        logger.error(e.getMessage, e)
         Conflict(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: InvalidReplicationFactorException =>
-        logger.error(e.getMessage, e)
         BadRequest(Json.toJson(createErrorResponse("Invalid Topic Replicas", e.getMessage)))
       case e: InvalidUserException =>
         BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: InvalidAclRoleException =>
         BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
-      case e: ResourceNotFound =>
+      case e: ResourceNotFoundException =>
         NotFound(Json.toJson(createErrorResponse(e.title, e.message)))
-      case e: UndefinedResource =>
+      case e: UndefinedResourceException =>
         InternalServerError(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: ExternalServiceException =>
         InternalServerError(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: Exception =>
         val message = "A server error occurred: " + exception.getMessage
-        logger.error(message, e)
         InternalServerError(Json.toJson(createErrorResponse("Internal Server Error", message)))
       case _ =>
         val message = "A server error occurred: " + exception.getMessage
-        logger.error(message, exception)
         InternalServerError(Json.toJson(createErrorResponse("Internal Server Error", message)))
     }
 

@@ -1,9 +1,10 @@
 package services
 
 import javax.inject.Inject
+import models.http.HttpModels.SchemaResponse
 import play.api.libs.ws.WSClient
 import play.api.{ Configuration, Logger }
-import utils.Exceptions.{ ExternalServiceException, UndefinedResource }
+import utils.Exceptions.{ ExternalServiceException, ResourceNotFoundException, UndefinedResourceException }
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -32,9 +33,19 @@ class SchemaRegistryService @Inject() (conf: Configuration, ws: WSClient) extend
       }
   }
 
+  def getSchema(cluster: String, schema: String, version: Int): Future[SchemaResponse] = {
+    val schemaRegistryUrl = getSchemaRegistryUrl(cluster)
+    ws.url(s"$schemaRegistryUrl/subjects/${schema}/versions/$version")
+      .get()
+      .map { response =>
+        processGetResponse[SchemaResponse](response, "Failed Schema Registry Get Schema Service Call")
+          .getOrElse(throw ResourceNotFoundException(s"Schema not found for `$schema` version `$version`"))
+      }
+  }
+
   private def getSchemaRegistryUrl(cluster: String): String = {
     conf.getOptional[String](cluster.toLowerCase + SCHEMA_REGISTRY_URL_CONFIG)
-      .getOrElse(throw UndefinedResource(s"Undefined Schema Registry Location for cluster $cluster"))
+      .getOrElse(throw UndefinedResourceException(s"Undefined Schema Registry Location for cluster $cluster"))
   }
 }
 

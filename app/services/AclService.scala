@@ -12,7 +12,7 @@ import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, Resource
 import play.api.Logger
 import play.api.db.Database
 import utils.AdminClientUtil
-import utils.Exceptions.{ InvalidUserException, ResourceNotFound }
+import utils.Exceptions.{ InvalidUserException, ResourceNotFoundException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -103,7 +103,7 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
   def deleteAcl(id: String) = {
     Future {
       db.withTransaction { implicit conn =>
-        val acl = dao.getAcl(id).getOrElse(throw ResourceNotFound(s"Acl not found for id $id"))
+        val acl = dao.getAcl(id).getOrElse(throw ResourceNotFoundException(s"Acl not found for id $id"))
         dao.deleteAcl(id)
         Try(deleteKafkaAcl(acl)) match {
           case Success(_) =>
