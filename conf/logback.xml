@@ -19,6 +19,7 @@
     <logger name="services" level="INFO" />
     <logger name="daos" level="INFO" />
     <logger name="utils" level="INFO" />
+    <logger name="specs" level="INFO" />
 
     <!-- Off these ones as they are annoying, and anyway we manage configuration ourselves -->
     <logger name="com.avaje.ebean.config.PropertyMapLoader" level="OFF" />
