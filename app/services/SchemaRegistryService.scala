@@ -29,7 +29,7 @@ class SchemaRegistryService @Inject() (conf: Configuration, ws: WSClient) extend
       .get()
       .map { response =>
         processGetResponse[List[Int]](response, "Failed Schema Registry Get Schema Versions Service Call")
-          .getOrElse(throw ExternalServiceException("Failed Schema Registry Service Call"))
+          .getOrElse(throw ResourceNotFoundException(s"Schema with subject `$schema` not found"))
       }
   }
 

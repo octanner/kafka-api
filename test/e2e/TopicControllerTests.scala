@@ -29,6 +29,8 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val dao = new TopicDao()
   val cluster = "test"
   val topic = Topic("test.some.topic", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val schema = SchemaRequest("testSchema", 1)
+  val mapping = TopicSchemaMapping(topic.name, schema)
   var conf: Configuration = _
 
   override def modulesToOverride: Seq[GuiceableModule] = Seq(
@@ -130,8 +132,6 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
 
   "Topic Controller #createSchemaMapping" must {
     "return Ok and create a mapping for topic and schema" in {
-      val schema = SchemaRequest("testSchema", 1)
-      val mapping = TopicSchemaMapping(topic.name, schema)
       val conf = app.injector.instanceOf[Configuration]
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
       setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
@@ -162,6 +162,15 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
       println(s"${result.status}: ${result.body}")
       Status(result.status) mustBe NotFound
     }
+  }
 
+  "Topic Controller #getTopicSchemaMappings" must {
+    "return Ok and return list of schema mappings" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topics/${topic.name}/topic-schema-mappings")
+        .get().futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+      (result.json \ "mappings").as[List[TopicSchemaMapping]] mustBe List(mapping)
+    }
   }
 }

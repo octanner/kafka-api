@@ -36,6 +36,12 @@ class TopicController @Inject() (service: TopicService) extends InjectedControll
     }
   }
 
+  def getTopicSchemaMappings(cluster: String, topic: String) = Action.async { implicit request =>
+    service.getTopicSchemaMappings(cluster, topic).map { mappings =>
+      Ok(Json.obj("mappings" -> mappings))
+    }
+  }
+
   def createSchemaMapping(cluster: String) = Action.async { implicit request =>
     processRequest[TopicSchemaMapping](createTopicSchemaMapping(cluster))
   }
