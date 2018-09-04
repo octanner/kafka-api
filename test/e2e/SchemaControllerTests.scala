@@ -1,5 +1,6 @@
 package e2e
 
+import models.http.HttpModels.SchemaResponse
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.when
 import org.scalatest.BeforeAndAfterEach
@@ -18,10 +19,16 @@ class SchemaControllerTests extends IntTestSpec with BeforeAndAfterEach with Moc
   val mockWs = mock[WSClient]
 
   val cluster = "test"
+  var conf: Configuration = _
 
   override def modulesToOverride: Seq[GuiceableModule] = Seq(
     bind[WSClient].toInstance(mockWs)
   )
+
+  override def beforeAll() = {
+    super.beforeAll()
+    conf = app.injector.instanceOf[Configuration]
+  }
 
   def setMockRequestResponseExpectations(url: String, status: Int, json: JsValue = Json.parse("{}")): (WSRequest, WSResponse) = {
     val mockReq = mock[WSRequest]
@@ -37,7 +44,6 @@ class SchemaControllerTests extends IntTestSpec with BeforeAndAfterEach with Moc
 
   "SchemaController #getSchemas" must {
     "return Ok and return schemas for the cluster" in {
-      val conf = app.injector.instanceOf[Configuration]
       val schemas = List("schema1", "schema2")
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects"
       val resp = Json.toJson(schemas)
@@ -52,7 +58,6 @@ class SchemaControllerTests extends IntTestSpec with BeforeAndAfterEach with Moc
 
   "SchemaController #getSchemaVersions" must {
     "return Ok and return schema versions for the cluster and schema name" in {
-      val conf = app.injector.instanceOf[Configuration]
       val schema = "schema1"
       val versions = List(1, 2, 3)
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/$schema/versions"
@@ -63,6 +68,22 @@ class SchemaControllerTests extends IntTestSpec with BeforeAndAfterEach with Moc
       println(s"${result.status}; ${result.body}")
       Status(result.status) mustBe Ok
       result.json mustBe Json.obj("versions" -> versions)
+    }
+  }
+
+  "SchemaController #getSchema" must {
+    "return Ok and return the schema name, version and schema" in {
+      val schemaName = "test.schema1"
+      val version = 1
+      val schema = """{"type": "string"}"""
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/$schemaName/versions/$version"
+      val resp = Json.toJson(SchemaResponse(schemaName, version, schema))
+      setMockRequestResponseExpectations(url, 200, resp)
+
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/schemas/$schemaName/versions/$version").get().futureValue
+      println(s"${result.status}; ${result.body}")
+      Status(result.status) mustBe Ok
+      result.json mustBe resp
     }
   }
 
