@@ -1,7 +1,7 @@
 package controllers
 
 import javax.inject.Inject
-import models.http.HttpModels.{ AclRequest, _ }
+import models.http.HttpModels.{ AclRequest, AclResponse }
 import play.api.Logger
 import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }

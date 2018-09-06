@@ -1,8 +1,8 @@
 package controllers
 
 import javax.inject.Inject
-import models.http.HttpModels._
-import models.KeyType._
+import models.KeyType
+import models.http.HttpModels.{ TopicKeyMappingRequest, TopicRequest, TopicResponse, TopicSchemaMapping }
 import play.api.Logger
 import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }
@@ -11,7 +11,7 @@ import utils.Exceptions.InvalidRequestException
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Success }
 
 class TopicController @Inject() (service: TopicService, schemaService: SchemaRegistryService) extends InjectedController with RequestProcessor {
   val logger = Logger(this.getClass)
@@ -67,7 +67,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   }.flatMap(f => f)
 
   private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
-    if (topicKeyMappingRequest.keyType == AVRO) {
+    if (topicKeyMappingRequest.keyType == KeyType.AVRO) {
       val schema = topicKeyMappingRequest.schema.getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
       schemaService.getSchema(cluster, schema.name, schema.version).transform {
         case Success(_) => Success(true)

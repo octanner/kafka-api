@@ -1,9 +1,9 @@
 package controllers
 
-import javax.inject._
+import javax.inject.{ Inject, Singleton }
 import play.api.Logger
 import play.api.libs.json.Json
-import play.api.mvc._
+import play.api.mvc.InjectedController
 
 @Singleton
 class HealthController @Inject() extends InjectedController {

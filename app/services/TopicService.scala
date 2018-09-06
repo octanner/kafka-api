@@ -14,7 +14,7 @@ import org.postgresql.util.PSQLException
 import play.api.db.Database
 import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
-import utils.Exceptions._
+import utils.Exceptions.{ NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
