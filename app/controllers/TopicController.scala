@@ -1,16 +1,19 @@
 package controllers
 
 import javax.inject.Inject
-import models.http.HttpModels._
+import models.KeyType
+import models.http.HttpModels.{ TopicKeyMappingRequest, TopicRequest, TopicResponse, TopicSchemaMapping }
 import play.api.Logger
 import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }
-import services.TopicService
+import services.{ SchemaRegistryService, TopicService }
+import utils.Exceptions.InvalidRequestException
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.util.{ Failure, Success }
 
-class TopicController @Inject() (service: TopicService) extends InjectedController with RequestProcessor {
+class TopicController @Inject() (service: TopicService, schemaService: SchemaRegistryService) extends InjectedController with RequestProcessor {
   val logger = Logger(this.getClass)
 
   def create(cluster: String) = Action.async { implicit request =>
@@ -46,8 +49,35 @@ class TopicController @Inject() (service: TopicService) extends InjectedControll
     processRequest[TopicSchemaMapping](createTopicSchemaMapping(cluster))
   }
 
+  def createKeyMapping(cluster: String) = Action.async { implicit request =>
+    processRequest[TopicKeyMappingRequest](createTopicKeyMapping(cluster))
+  }
+
   private def createTopicSchemaMapping(cluster: String)(mapping: TopicSchemaMapping): Future[Result] = {
     service.createTopicSchemaMapping(cluster, mapping).map { m => Ok(Json.toJson(m)) }
+  }
+
+  private def createTopicKeyMapping(cluster: String)(mapping: TopicKeyMappingRequest): Future[Result] = {
+    for { isValidRequest <- validateTopicKeyMappingRequest(cluster, mapping) } yield {
+      if (isValidRequest)
+        service.createTopicKeyMapping(cluster, mapping).map(_ => Ok)
+      else
+        throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
+    }
+  }.flatMap(f => f)
+
+  private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
+    if (topicKeyMappingRequest.keyType == KeyType.AVRO) {
+      val schema = topicKeyMappingRequest.schema.getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
+      schemaService.getSchema(cluster, schema.name, schema.version).transform {
+        case Success(_) => Success(true)
+        case Failure(e) =>
+          logger.error(e.getMessage, e)
+          Success(false)
+      }
+    } else {
+      Future(true)
+    }
   }
 
 }

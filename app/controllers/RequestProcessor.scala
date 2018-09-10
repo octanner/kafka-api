@@ -4,7 +4,7 @@ import models.http.HttpModels._
 import models.http.HttpRequest
 import play.api.Logger
 import play.api.libs.json._
-import play.api.mvc._
+import play.api.mvc.{ AnyContent, InjectedController, Request, Result }
 
 import scala.concurrent.Future
 

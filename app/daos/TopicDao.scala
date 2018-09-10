@@ -3,7 +3,7 @@ package daos
 import java.sql.Connection
 
 import anorm._
-import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration }
+import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping }
 import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.joda.time.DateTime
 
@@ -49,6 +49,15 @@ class TopicDao {
         WHERE t.topic = $topic AND tsm.cluster = $cluster
       """
       .as(topicSchemaMappingParser.*)
+  }
+
+  def insertTopicKeyMapping(cluster: String, topicKeyMapping: TopicKeyMapping)(implicit conn: Connection) = {
+    SQL"""
+        INSERT INTO TOPIC_KEY_MAPPING (TOPIC_ID, KEY_TYPE, SCHEMA, VERSION, CLUSTER) VALUES
+        (${topicKeyMapping.topicId}, ${topicKeyMapping.keyType.toString}, ${topicKeyMapping.schema},
+        ${topicKeyMapping.version}, ${cluster})
+      """
+      .execute()
   }
 
   val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"

@@ -4,8 +4,9 @@ import java.util.Properties
 
 import anorm._
 import daos.TopicDao
+import models.KeyType._
 import models.Models.{ Topic, TopicConfiguration }
-import models.http.HttpModels.{ SchemaRequest, SchemaResponse, TopicRequest, TopicResponse, TopicSchemaMapping }
+import models.http.HttpModels.{ SchemaRequest, SchemaResponse, TopicKeyMappingRequest, TopicRequest, TopicResponse, TopicSchemaMapping }
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig }
 import org.mockito.ArgumentMatchers.any
@@ -28,9 +29,14 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val mockWs = mock[WSClient]
   val dao = new TopicDao()
   val cluster = "test"
-  val topic = Topic("test.some.topic", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic1 = Topic("test.some.topic.1", "Test topic creation 1", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic2 = Topic("test.some.topic.2", "Test topic creation 2", "testOrg", TopicConfiguration(Some("compact"), Some(1), Some(888888), Some(1)))
+  val topic3 = Topic("test.some.topic.3", "Test topic creation 3", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
   val schema = SchemaRequest("testSchema", 1)
-  val mapping = TopicSchemaMapping(topic.name, schema)
+  val mapping = TopicSchemaMapping(topic1.name, schema)
+  val keyMappingNone = TopicKeyMappingRequest(topic1.name, NONE, None)
+  val keyMappingStr = TopicKeyMappingRequest(topic1.name, STRING, None)
+  val keyMappingAvro = TopicKeyMappingRequest(topic1.name, AVRO, Some(schema))
   var conf: Configuration = _
 
   override def modulesToOverride: Seq[GuiceableModule] = Seq(
@@ -48,6 +54,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   override def afterAll(): Unit = {
     db.withTransaction { implicit conn =>
       SQL"""
+           delete from TOPIC_KEY_MAPPING;
            delete from TOPIC_SCHEMA_MAPPING;
            delete from TOPIC;
         """.execute()
@@ -82,21 +89,24 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
 
     val adminClient = AdminClient.create(props)
     val allTopics = adminClient.listTopics().names().get()
+    adminClient.close()
     allTopics.contains(topicName)
+  }
+
+  private def createTopic(topic: Topic) = {
+    val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/topic")
+      .post(Json.toJson(TopicRequest(topic)))
+    val result = futureResult.futureValue
+    Status(result.status) mustBe Ok
+    result
   }
 
   "Topic Controller #create" must {
     "create a topic in kafka cluster and database" in {
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/topic")
-        .post(Json.toJson(TopicRequest(topic)))
-      val result = futureResult.futureValue
-      Logger.info(s"result status: ${result.status}, result body: ${result.body}")
-      Logger.info(s"Kafka has new topic? ${topicExistsInKafka(topic.name)}")
-      Logger.info(s"Topic in DB: ${getTopicFromDB(topic.name)}")
-      Status(result.status) mustBe Ok
-      result.json mustBe Json.toJson(TopicResponse(topic))
-      topicExistsInKafka(topic.name) mustBe true
-      getTopicFromDB(topic.name) mustBe Some(topic)
+      val result = createTopic(topic1)
+      result.json mustBe Json.toJson(TopicResponse(topic1))
+      topicExistsInKafka(topic1.name) mustBe true
+      getTopicFromDB(topic1.name) mustBe Some(topic1)
     }
   }
 
@@ -104,16 +114,16 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     "get a list of all topics" in {
       val futureResult = wsUrl(s"/v1/kafka/topics").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic)))
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic1)))
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
     }
 
     "get a single topic by name" in {
-      val futureResult = wsUrl(s"/v1/kafka/topics/${topic.name}").get()
+      val futureResult = wsUrl(s"/v1/kafka/topics/${topic1.name}").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.toJson(TopicResponse(topic))
+      val expectedJson = Json.toJson(TopicResponse(topic1))
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
@@ -153,7 +163,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
 
     "return NotFound when schema is not found" in {
       val schema = SchemaRequest("testSchema", 1)
-      val mapping = TopicSchemaMapping(topic.name, schema)
+      val mapping = TopicSchemaMapping(topic1.name, schema)
       val conf = app.injector.instanceOf[Configuration]
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
       setMockRequestResponseExpectations(url, 404, Json.obj("error" -> "Not Found"))
@@ -166,11 +176,76 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
 
   "Topic Controller #getTopicSchemaMappings" must {
     "return Ok and return list of schema mappings" in {
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topics/${topic.name}/topic-schema-mappings")
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topics/${topic1.name}/topic-schema-mappings")
         .get().futureValue
       println(s"${result.status}: ${result.body}")
       Status(result.status) mustBe Ok
       (result.json \ "mappings").as[List[TopicSchemaMapping]] mustBe List(mapping)
+    }
+  }
+
+  "Topic Controller #createTopicKeyMapping" must {
+    "return Ok for key type none mapping" in {
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
+
+      val req = s"""{"topic": "${topic1.name}", "keyType": "None"}"""
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-key-mapping")
+        .post(Json.parse(req)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+    }
+
+    "return BadRequest for duplicate key mapping request" in {
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
+
+      val req = s"""{"topic": "${topic1.name}", "keyType": "None"}"""
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-key-mapping")
+        .post(Json.parse(req)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe BadRequest
+    }
+
+    "return Ok for key type string mapping" in {
+      createTopic(topic2)
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
+
+      val req = s"""{"topic": "${topic2.name}", "keyType": "string"}"""
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-key-mapping")
+        .post(Json.parse(req)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+    }
+
+    "return Ok for key type avro mapping" in {
+      createTopic(topic3)
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
+
+      val req = s"""{"topic": "${topic3.name}", "keyType": "AVRO", "schema": {"name": "${schema.name}", "version": ${schema.version}}}"""
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-key-mapping")
+        .post(Json.parse(req)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+    }
+
+    "return Bad Request for key type avro mapping without specifying schema" in {
+      createTopic(topic3)
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/${mapping.schema.version}"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, schema.version, "")))
+
+      val req = s"""{"topic": "${topic3.name}", "keyType": "AVRO"}"""
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-key-mapping")
+        .post(Json.parse(req)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe BadRequest
     }
   }
 }

@@ -4,8 +4,8 @@ import java.util.concurrent.ExecutionException
 
 import daos.TopicDao
 import javax.inject.Inject
-import models.Models.{ Topic, TopicConfiguration }
-import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
+import models.Models.{ Topic, TopicConfiguration, TopicKeyMapping }
+import models.http.HttpModels.{ SchemaRequest, TopicKeyMappingRequest, TopicSchemaMapping }
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.TopicConfig
@@ -14,7 +14,7 @@ import org.postgresql.util.PSQLException
 import play.api.db.Database
 import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
-import utils.Exceptions.{ NonUniqueTopicNameException, ResourceNotFoundException }
+import utils.Exceptions.{ NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -125,6 +125,29 @@ class TopicService @Inject() (
     Future {
       db.withConnection { implicit conn =>
         dao.getTopicSchemaMappings(cluster, topic)
+      }
+    }
+  }
+
+  def createTopicKeyMapping(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest) = {
+    val topicFut = Future {
+      db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, topicKeyMappingRequest.topic) }
+    }
+    for {
+      topicOpt <- topicFut
+    } yield {
+      val topic = topicOpt.getOrElse(throw ResourceNotFoundException(s"Topic `${topicKeyMappingRequest.topic}` Not Found in cluster ${cluster}"))
+      val topiKeyMapping = TopicKeyMapping(topic.id, topicKeyMappingRequest.keyType,
+        topicKeyMappingRequest.schema.map(_.name), topicKeyMappingRequest.schema.map(_.version))
+
+      db.withTransaction { implicit conn =>
+        Try(dao.insertTopicKeyMapping(cluster, topiKeyMapping)) match {
+          case Success(insert) => insert
+          case Failure(e: PSQLException) if (e.getSQLState == PSQL_UNIQUE_VIOLATION_CODE) =>
+            throw ResourceExistsException(s"Topic Key Mapping already exists for topic `${topic.name}` and cannot be changed")
+          case Failure(e) => throw e
+
+        }
       }
     }
   }
