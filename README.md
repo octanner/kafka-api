@@ -18,6 +18,8 @@ get /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings
 post /v1/kafka/cluster/:cluster/topic
 post /v1/kafka/cluster/:cluster/user
 post /v1/kafka/cluster/:cluster/acls
+post /v1/kafka/cluster/:cluster/topic-schema-mapping
+post /v1/kafka/cluster/:cluster/topic-key-mapping
 delete /v1/kafka/acls/:id
 ```
 
@@ -367,6 +369,62 @@ Create Acl for a topic, user and role
 
 #### Response Codes
 200: Ok with above response
+
+500: Internal Server Error
+
+### POST /v1/kafka/cluster/:cluster/topic-schema-mapping
+#### Request Body 
+```Json
+{
+   "topic":"test.some.topic.1",
+   "schema":{
+      "name":"testSchema",
+      "version":1
+   }
+}
+```
+#### Response
+```Json
+{
+   "topic":"test.some.topic.1",
+   "schema":{
+      "name":"testSchema",
+      "version":1
+   }
+}
+```
+
+#### Description
+Create Acl for a topic, user and role
+
+#### Response Codes
+200: Ok with above response
+
+400: Invalid Schema Name or Version
+
+500: Internal Server Error
+
+### POST /v1/kafka/cluster/:cluster/topic-key-mapping
+#### Request Body 
+```Json
+{  
+   "topic":"test.some.topic.3",
+   "keyType":"AVRO", //"None", "String" Or "Avro"(Schema is required for Avro)
+   "schema":{  
+      "name":"testSchema",
+      "version":1
+   }
+}
+```
+#### Response
+
+#### Description
+Create topic key mapping
+
+#### Response Codes
+200: Ok with empty response
+
+400: Invalid Request. Invalid Schema or schema not provided for Avro key type
 
 500: Internal Server Error
 
