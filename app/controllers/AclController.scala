@@ -39,7 +39,7 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     Try(service.createPermissions(cluster, aclRequest)) match {
       case Success(id)                          => Future(Ok(Json.obj("id" -> id)))
       case Failure(e: IllegalArgumentException) => Future(BadRequest(e.getMessage))
-      case Failure(_)                           => Future(InternalServerError)
+      case Failure(e)                           => throw e
     }
   }
 
