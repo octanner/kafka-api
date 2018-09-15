@@ -8,6 +8,7 @@ import models.KeyType.KeyType
 import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping }
 import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.joda.time.DateTime
+import utils.Exceptions.InvalidKeyTypeException
 
 class TopicDao {
   def insert(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String)(implicit conn: Connection) = {
@@ -79,7 +80,8 @@ class TopicDao {
   implicit val topicSchemaMappingParser = Macro.parser[TopicSchemaMapping]("topic", "schema", "version")
   implicit val keyTypeParser: Column[KeyType] = Column.nonNull { (value, _) =>
     value match {
-      case keyType: String => Right(KeyType.withName(keyType.toUpperCase))
+      case keyType: String =>
+        Right(KeyType.values.find(_.toString == keyType.toUpperCase).getOrElse(throw InvalidKeyTypeException(s"Invalid key type `$keyType`")))
     }
   }
   implicit val topicKeyMappingParser = Macro.parser[TopicKeyMapping]("topic_id", "key_type", "schema", "version")

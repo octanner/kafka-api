@@ -43,6 +43,8 @@ class ErrorHandler extends HttpErrorHandler {
         BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: InvalidAclRoleException =>
         BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
+      case e: InvalidKeyTypeException =>
+        BadRequest(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: ResourceNotFoundException =>
         NotFound(Json.toJson(createErrorResponse(e.title, e.message)))
       case e: ResourceExistsException =>
