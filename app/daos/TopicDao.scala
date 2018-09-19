@@ -3,9 +3,12 @@ package daos
 import java.sql.Connection
 
 import anorm._
+import models.KeyType
+import models.KeyType.KeyType
 import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping }
 import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.joda.time.DateTime
+import utils.Exceptions.InvalidKeyTypeException
 
 class TopicDao {
   def insert(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String)(implicit conn: Connection) = {
@@ -51,6 +54,15 @@ class TopicDao {
       .as(topicSchemaMappingParser.*)
   }
 
+  def getTopicKeyMapping(cluster: String, topic: String)(implicit conn: Connection): Option[TopicKeyMapping] = {
+    SQL"""
+        SELECT t.topic_id as topic_id, key_type, schema, version
+        FROM TOPIC_KEY_MAPPING tkm INNER JOIN TOPIC t ON tkm.topic_id = t.topic_id
+        WHERE t.topic = $topic AND tkm.cluster = $cluster
+      """
+      .as(topicKeyMappingParser.singleOpt)
+  }
+
   def insertTopicKeyMapping(cluster: String, topicKeyMapping: TopicKeyMapping)(implicit conn: Connection) = {
     SQL"""
         INSERT INTO TOPIC_KEY_MAPPING (TOPIC_ID, KEY_TYPE, SCHEMA, VERSION, CLUSTER) VALUES
@@ -66,5 +78,12 @@ class TopicDao {
   implicit val topicParser = Macro.parser[Topic]("topic", "description", "organization", "cleanup_policy", "partitions", "retention_ms", "replicas")
   implicit val schemaParser = Macro.parser[SchemaRequest]("schema", "version")
   implicit val topicSchemaMappingParser = Macro.parser[TopicSchemaMapping]("topic", "schema", "version")
+  implicit val keyTypeParser: Column[KeyType] = Column.nonNull { (value, _) =>
+    value match {
+      case keyType: String =>
+        Right(KeyType.values.find(_.toString == keyType.toUpperCase).getOrElse(throw InvalidKeyTypeException(s"Invalid key type `$keyType`")))
+    }
+  }
+  implicit val topicKeyMappingParser = Macro.parser[TopicKeyMapping]("topic_id", "key_type", "schema", "version")
   implicit val basicTopicInfoParser = Macro.parser[BasicTopicInfo]("topic_id", "topic", "cluster")
 }

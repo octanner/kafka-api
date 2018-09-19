@@ -2,26 +2,26 @@ package services
 
 import java.util.concurrent.TimeUnit
 
-import daos.AclDao
+import daos.{ AclDao, TopicDao }
 import javax.inject.Inject
-import models.Models.Acl
-import models.http.HttpModels.AclRequest
+import models.Models.{ Acl, TopicKeyMapping }
+import models.http.HttpModels.{ AclRequest, TopicSchemaMapping }
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
 import play.api.Logger
 import play.api.db.Database
 import utils.AdminClientUtil
-import utils.Exceptions.{ InvalidUserException, ResourceNotFoundException }
+import utils.Exceptions.{ InvalidRequestException, InvalidUserException, ResourceNotFoundException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
-class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
+class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util: AdminClientUtil) {
 
   val logger = Logger(this.getClass)
+  val VALID_TOPIC_KEY_VALUE_MAPPINGS = "valid"
 
   def getCredentials(cluster: String, user: String) = {
     Future {
@@ -63,14 +63,23 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
 
   def createPermissions(cluster: String, aclRequest: AclRequest) = {
     db.withTransaction { implicit conn =>
-      Try(dao.addPermissionToDb(cluster, aclRequest)) match {
-        case Success(id) =>
-          addPermissionToKafka(cluster, aclRequest)
-          id
-        case Failure(e) =>
-          logger.error(s"Failed to create permission in DB: ${e.getMessage}")
-          throw e
+      val topicKeyMapping = topicDao.getTopicKeyMapping(cluster, aclRequest.topic)
+      val topicSchemaMappings = topicDao.getTopicSchemaMappings(cluster, aclRequest.topic)
+      val validationMessage = validateTopicKeyAndValueSchemaMappings(topicKeyMapping, topicSchemaMappings)
+      validationMessage match {
+        case VALID_TOPIC_KEY_VALUE_MAPPINGS =>
+          Try(dao.addPermissionToDb(cluster, aclRequest)) match {
+            case Success(id) =>
+              addPermissionToKafka(cluster, aclRequest)
+              id
+            case Failure(e) =>
+              logger.error(s"Failed to create permission in DB: ${e.getMessage}")
+              throw e
+          }
+        case invalidMessage: String =>
+          throw InvalidRequestException(s"$invalidMessage for topic `${aclRequest.topic}`, before creating acl")
       }
+
     }
   }
 
@@ -143,5 +152,19 @@ class AclService @Inject() (db: Database, dao: AclDao, util: AdminClientUtil) {
     val resourcePattern = new ResourcePatternFilter(resourceType, resourceName, PatternType.LITERAL)
     val accessControlEntry = new AccessControlEntryFilter(s"User:$username", host, role, AclPermissionType.ALLOW)
     new AclBindingFilter(resourcePattern, accessControlEntry)
+  }
+
+  private def validateTopicKeyAndValueSchemaMappings(
+    topicKeyMapping:     Option[TopicKeyMapping],
+    topicSchemaMappings: List[TopicSchemaMapping]): String = {
+    if (topicKeyMapping.isEmpty && topicSchemaMappings.isEmpty) {
+      "Topic Key Mapping and atleast one Topic Value Schema Mapping needs to be defined"
+    } else if (topicKeyMapping.isDefined && topicSchemaMappings.isEmpty) {
+      "Atleast one Topic Value Schema Mapping need to be defined"
+    } else if (topicKeyMapping.isEmpty && !topicSchemaMappings.isEmpty) {
+      "Topic Key Mapping need to be defined"
+    } else {
+      VALID_TOPIC_KEY_VALUE_MAPPINGS
+    }
   }
 }

@@ -1,9 +1,9 @@
 package e2e
 
-import java.util.Properties
+import java.util.{Properties, UUID}
 
 import anorm._
-import daos.AclDao
+import daos.{AclDao, TopicDao}
 import models.AclRole
 import models.Models.{Acl, AclCredentials, Topic, TopicConfiguration}
 import models.http.HttpModels.{AclRequest, AclResponse}
@@ -27,17 +27,26 @@ import scala.util.Try
 
 class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with EmbeddedKafka {
   val dao = new AclDao()
+  val topicDao = new TopicDao()
   val cluster = "test"
   val username = "testusername"
   val username2 = "testusername1"
   val password = "testpassword"
   val password2 = "testpassword1"
   val topic = Topic("test.some.topic", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic2 = Topic("test.some.topic.2", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic3 = Topic("test.some.topic.3", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic4 = Topic("test.some.topic.4", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topicId = UUID.randomUUID.toString
+  val topicId2 = UUID.randomUUID.toString
+  val topicId3 = UUID.randomUUID.toString
+  val topicId4 = UUID.randomUUID.toString
   var conf: Configuration = _
 
   override def modulesToOverride: Seq[GuiceableModule] = Seq(
     bind[Database].toInstance(db),
     bind[AclDao].toInstance(dao),
+    bind[TopicDao].toInstance(topicDao),
   )
 
   override def beforeAll() = {
@@ -45,8 +54,25 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     db.withTransaction { implicit conn =>
       SQL"""
-            insert into topic (cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
-            ($cluster, ${topic.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
+            insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
+            ($topicId, $cluster, ${topic.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
+            insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
+            ($topicId2, $cluster, ${topic2.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
+            insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
+            ($topicId3, $cluster, ${topic3.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
+            insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
+            ($topicId4, $cluster, ${topic4.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
+
+            insert into topic_key_mapping (cluster, topic_id, key_type) values
+            ($cluster, ${topicId}, 'NONE');
+            insert into topic_schema_mapping (cluster, topic_id, schema, version) values
+            ($cluster, ${topicId}, 'testschema', 1);
+
+            insert into topic_key_mapping (cluster, topic_id, key_type) values
+            ($cluster, ${topicId2}, 'NONE');
+
+            insert into topic_schema_mapping (cluster, topic_id, schema, version) values
+            ($cluster, ${topicId3}, 'testschema', 1);
 
             insert into acl_source (username, password, cluster, claimed) values ($username, $password, $cluster, false);
             insert into acl_source (username, password, cluster, claimed) values ($username2, $password2, $cluster, false);
@@ -83,6 +109,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       SQL"""
             DELETE FROM acl_source;
             DELETE FROM acl;
+            DELETE FROM topic_schema_mapping;
+            DELETE FROM topic_key_mapping;
             DELETE FROM topic;
          """.executeUpdate()
     }
@@ -132,6 +160,48 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
+    }
+
+    "return Bad Request when topic key and schema mapping both are not defined" in {
+      val role = AclRole.PRODUCER
+      val aclRequestJson = Json.obj("topic" -> topic4.name, "user" -> username, "role" -> "Producer")
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
+      val result = futureResult.futureValue
+
+      println(s"result status: ${result.status}; body: ${result.body}")
+      Status(result.status) mustBe BadRequest
+      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Topic Key Mapping and atleast one Topic Value Schema Mapping needs to be defined for topic `${topic4.name}`, before creating acl"
+      entriesWithRoleInDb(role.role) mustBe 0
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, role.operation).size() mustEqual 0
+    }
+
+    "return Bad Request when topic key mapping is not defined" in {
+      val role = AclRole.PRODUCER
+      val aclRequestJson = Json.obj("topic" -> topic3.name, "user" -> username, "role" -> "Producer")
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
+      val result = futureResult.futureValue
+
+      println(s"result status: ${result.status}; body: ${result.body}")
+      Status(result.status) mustBe BadRequest
+      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Topic Key Mapping need to be defined for topic `${topic3.name}`, before creating acl"
+      entriesWithRoleInDb(role.role) mustBe 0
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, role.operation).size() mustEqual 0
+    }
+
+    "return Bad Request when topic schema mapping both are not defined" in {
+      val role = AclRole.PRODUCER
+      val aclRequestJson = Json.obj("topic" -> topic2.name, "user" -> username, "role" -> "Producer")
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
+      val result = futureResult.futureValue
+
+      println(s"result status: ${result.status}; body: ${result.body}")
+      Status(result.status) mustBe BadRequest
+      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Atleast one Topic Value Schema Mapping need to be defined for topic `${topic2.name}`, before creating acl"
+      entriesWithRoleInDb(role.role) mustBe 0
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, role.operation).size() mustEqual 0
     }
 
     "allow user write access for topic" in {
