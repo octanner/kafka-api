@@ -2,10 +2,11 @@ package daos
 
 import java.sql.Connection
 
+import anorm.SqlParser.{ str, get }
 import anorm._
 import models.KeyType
 import models.KeyType.KeyType
-import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping }
+import models.Models.{ BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping, TopicKeyType }
 import models.http.HttpModels.{ SchemaRequest, TopicSchemaMapping }
 import org.joda.time.DateTime
 import utils.Exceptions.InvalidKeyTypeException
@@ -22,7 +23,10 @@ class TopicDao {
   }
 
   def getTopicInfo(topicName: String)(implicit conn: Connection): Option[Topic] = {
-    SQL"SELECT #$topicColumns FROM topic WHERE topic = $topicName".as(topicParser.singleOpt)
+    SQL"""SELECT #$topicColumns
+          FROM topic t LEFT OUTER JOIN topic_key_mapping tkm ON (t.topic_id = tkm.topic_id)
+          WHERE topic = $topicName
+       """.as(topicParser.singleOpt)
   }
 
   def getBasicTopicInfo(cluster: String, topicName: String)(implicit conn: Connection): Option[BasicTopicInfo] = {
@@ -33,7 +37,9 @@ class TopicDao {
   }
 
   def getAllTopics()(implicit conn: Connection): Seq[Topic] = {
-    SQL"SELECT #$topicColumns FROM topic".as(topicParser.*)
+    SQL"""SELECT #$topicColumns
+          FROM topic t LEFT OUTER JOIN topic_key_mapping tkm ON (t.topic_id = tkm.topic_id)
+       """.as(topicParser.*)
   }
 
   def upsertTopicSchemaMapping(cluster: String, topicId: String, mapping: TopicSchemaMapping)(implicit conn: Connection) = {
@@ -73,9 +79,10 @@ class TopicDao {
   }
 
   val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"
-  val topicColumns = s"topic, description, organization, $topicConfigColumns"
+  val topicKeyTypeColumns = "key_type, schema, version"
+  val topicColumns = s"topic, description, organization, $topicConfigColumns, $topicKeyTypeColumns"
+
   implicit val topicConfigParser = Macro.parser[TopicConfiguration]("cleanup_policy", "partitions", "retention_ms", "replicas")
-  implicit val topicParser = Macro.parser[Topic]("topic", "description", "organization", "cleanup_policy", "partitions", "retention_ms", "replicas")
   implicit val schemaParser = Macro.parser[SchemaRequest]("schema", "version")
   implicit val topicSchemaMappingParser = Macro.parser[TopicSchemaMapping]("topic", "schema", "version")
   implicit val keyTypeParser: Column[KeyType] = Column.nonNull { (value, _) =>
@@ -86,4 +93,10 @@ class TopicDao {
   }
   implicit val topicKeyMappingParser = Macro.parser[TopicKeyMapping]("topic_id", "key_type", "schema", "version")
   implicit val basicTopicInfoParser = Macro.parser[BasicTopicInfo]("topic_id", "topic", "cluster")
+  implicit val topicParser: RowParser[Topic] =
+    (str("topic") ~ str("description") ~ str("organization") ~ topicConfigParser ~ get[Option[String]]("key_type") ~ get[Option[String]]("schema") ~ get[Option[Int]]("version")) map {
+      case topic ~ descr ~ org ~ topicConfig ~ keyTypeOpt ~ schemaOpt ~ versionsOpt =>
+        var keyType = keyTypeOpt.map { k => KeyType.values.find(_.toString == k.toUpperCase).getOrElse(throw InvalidKeyTypeException(s"Invalid key type `$k`")) }
+        Topic(topic, descr, org, topicConfig, keyType.map { k => TopicKeyType(k, schemaOpt, versionsOpt) })
+    }
 }

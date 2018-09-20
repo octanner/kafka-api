@@ -1,11 +1,12 @@
 package e2e
 
-import java.util.Properties
+import java.util.{ Properties, UUID }
 
 import anorm._
 import daos.TopicDao
+import models.KeyType
 import models.KeyType._
-import models.Models.{ Topic, TopicConfiguration }
+import models.Models.{ Topic, TopicConfiguration, TopicKeyType }
 import models.http.HttpModels.{ SchemaRequest, SchemaResponse, TopicKeyMappingRequest, TopicRequest, TopicResponse, TopicSchemaMapping }
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig }
@@ -29,9 +30,12 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val mockWs = mock[WSClient]
   val dao = new TopicDao()
   val cluster = "test"
+  val avroTopicKeyType = TopicKeyType(KeyType.AVRO, Some("Test.Schema.Key"), Some(1))
   val topic1 = Topic("test.some.topic.1", "Test topic creation 1", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
   val topic2 = Topic("test.some.topic.2", "Test topic creation 2", "testOrg", TopicConfiguration(Some("compact"), Some(1), Some(888888), Some(1)))
   val topic3 = Topic("test.some.topic.3", "Test topic creation 3", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic4 = Topic("test.some.topic.4", "Test topic creation 4", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType))
+  val topic4_id = UUID.randomUUID.toString
   val schema = SchemaRequest("testSchema", 1)
   val mapping = TopicSchemaMapping(topic1.name, schema)
   val keyMappingNone = TopicKeyMappingRequest(topic1.name, NONE, None)
@@ -49,6 +53,14 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     super.beforeAll()
     EmbeddedKafka.start()
     conf = app.injector.instanceOf[Configuration]
+    db.withTransaction { implicit conn =>
+      SQL"""
+           insert into topic (topic_id, cluster, topic, description, organization, partitions, replicas, retention_ms, cleanup_policy) values
+           ($topic4_id, $cluster, ${topic4.name}, ${topic4.description}, ${topic4.organization}, ${topic4.config.partitions}, ${topic4.config.replicas}, ${topic4.config.retentionMs}, ${topic4.config.cleanupPolicy});
+           insert into topic_key_mapping (cluster, topic_id, key_type, schema, version) values
+           ($cluster, ${topic4_id}, ${avroTopicKeyType.keyType.toString}, ${avroTopicKeyType.schema}, ${avroTopicKeyType.version});
+        """.execute()
+    }
   }
 
   override def afterAll(): Unit = {
@@ -114,7 +126,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     "get a list of all topics" in {
       val futureResult = wsUrl(s"/v1/kafka/topics").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic1)))
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic4), Json.toJson(topic1)))
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
@@ -125,6 +137,15 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
       val result = futureResult.futureValue
       val expectedJson = Json.toJson(TopicResponse(topic1))
 
+      Status(result.status) mustBe Ok
+      result.json mustBe expectedJson
+    }
+
+    "get a single topic by name with key mapping" in {
+      val futureResult = wsUrl(s"/v1/kafka/topics/${topic4.name}").get()
+      val result = futureResult.futureValue
+      val expectedJson = Json.toJson(TopicResponse(topic4))
+      println(result.body)
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
     }
