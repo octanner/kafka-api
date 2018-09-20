@@ -8,7 +8,8 @@ import play.api.libs.json._
 
 object Models {
   case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
-  case class Topic(name: String, description: String, organization: String, config: TopicConfiguration)
+  case class TopicKeyType(keyType: KeyType, schema: Option[String], version: Option[Int])
+  case class Topic(name: String, description: String, organization: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None)
   case class BasicTopicInfo(id: String, name: String, cluster: String)
   case class AclCredentials(username: String, password: String)
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
@@ -29,6 +30,7 @@ object Models {
   )(unlift(TopicConfiguration.unapply))
 
   implicit val topicConfigFormat: Format[TopicConfiguration] = Format(topicConfigReads, topicConfigWrites)
+  implicit val topicKeyTypeFormat: Format[TopicKeyType] = Json.format[TopicKeyType]
   implicit val topicFormat: Format[Topic] = Json.format[Topic]
   implicit val aclCredentialsFormat: Format[AclCredentials] = Json.format[AclCredentials]
   implicit val aclFormat: Format[Acl] = Json.format[Acl]
