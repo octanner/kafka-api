@@ -14,7 +14,7 @@ import org.postgresql.util.PSQLException
 import play.api.db.Database
 import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
-import utils.Exceptions.{ NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException }
+import utils.Exceptions.{ NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException, UndefinedResourceException }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -33,19 +33,23 @@ class TopicService @Inject() (
 
   def createTopic(cluster: String, topic: Topic): Future[Topic] = {
     val topicName = topic.name
-    val partitions = topic.config.partitions.getOrElse(
-      conf.get[Int](cluster.toLowerCase + DEFAULT_PARTITIONS_CONFIG))
-    val replicas = topic.config.replicas.getOrElse(
-      conf.get[Int](cluster.toLowerCase + DEFAULT_REPLICAS_CONFIG))
-    val retentionMs = topic.config.retentionMs.getOrElse(
-      conf.get[Long](cluster.toLowerCase + DEFAULT_RETENTION_CONFIG))
-    val cleanupPolicy = topic.config.cleanupPolicy.getOrElse(TopicConfig.CLEANUP_POLICY_DELETE)
-    val configs = Map(
-      TopicConfig.RETENTION_MS_CONFIG -> retentionMs.toString,
-      TopicConfig.CLEANUP_POLICY_CONFIG -> cleanupPolicy)
-    val topicConfig = TopicConfiguration(Some(cleanupPolicy), Some(partitions), Some(retentionMs), Some(replicas))
 
     Future {
+      val configSet = db.withConnection { implicit conn => dao.getConfigSet(cluster, topic.config.name) }
+            .getOrElse(throw new UndefinedResourceException(s"Config Set not yet setup for cluster `$cluster` and config name `${topic.config.name}`"))
+      val partitions = topic.config.partitions.getOrElse(configSet.partitions.getOrElse(
+        conf.get[Int](cluster.toLowerCase + DEFAULT_PARTITIONS_CONFIG)))
+      val replicas = topic.config.replicas.getOrElse(configSet.replicas.getOrElse(
+        conf.get[Int](cluster.toLowerCase + DEFAULT_REPLICAS_CONFIG)))
+      val retentionMs = topic.config.retentionMs.getOrElse(configSet.retentionMs.getOrElse(
+        conf.get[Long](cluster.toLowerCase + DEFAULT_RETENTION_CONFIG)))
+      val cleanupPolicy = topic.config.cleanupPolicy.getOrElse(configSet.cleanupPolicy.getOrElse(
+        TopicConfig.CLEANUP_POLICY_DELETE))
+      val configs = Map(
+        TopicConfig.RETENTION_MS_CONFIG -> retentionMs.toString,
+        TopicConfig.CLEANUP_POLICY_CONFIG -> cleanupPolicy)
+      val topicConfig = TopicConfiguration(topic.config.name, Some(cleanupPolicy), Some(partitions), Some(retentionMs), Some(replicas))
+
       Try(createTopicInKafka(cluster, topicName, partitions, replicas, configs).get()) match {
         case Success(_) =>
           createTopicInDB(cluster, topic, partitions, replicas, retentionMs, cleanupPolicy)
@@ -151,6 +155,23 @@ class TopicService @Inject() (
       }
     }
   }
+
+  def getAllConfigSets(cluster: String) = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getAllConfigSets(cluster)
+      }
+    }
+  }
+
+  def getConfigSet(cluster: String, name: String) = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getConfigSet(cluster, name).getOrElse(throw ResourceNotFoundException(s"Config Set not defined for cluster `$cluster` and name `$name`"))
+      }
+    }
+  }
+
 }
 
 object TopicService {

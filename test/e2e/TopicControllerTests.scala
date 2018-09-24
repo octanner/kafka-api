@@ -31,10 +31,13 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val dao = new TopicDao()
   val cluster = "test"
   val avroTopicKeyType = TopicKeyType(KeyType.AVRO, Some("Test.Schema.Key"), Some(1))
-  val topic1 = Topic("test.some.topic.1", "Test topic creation 1", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic2 = Topic("test.some.topic.2", "Test topic creation 2", "testOrg", TopicConfiguration(Some("compact"), Some(1), Some(888888), Some(1)))
-  val topic3 = Topic("test.some.topic.3", "Test topic creation 3", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic4 = Topic("test.some.topic.4", "Test topic creation 4", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType))
+  val ledgerConfigSet = TopicConfiguration("ledger", Some("delete"), Some(3), Some(2629740000L), Some(1))
+  val stateConfigSet = TopicConfiguration("state", Some("compact"), Some(3), Some(-1), Some(1))
+  val eventConfigSet = TopicConfiguration("event", Some("delete"), Some(3), Some(2629740000L), Some(1))
+  val topic1 = Topic("test.some.topic.1", TopicConfiguration("ledger", None, None, None, None))
+  val topic2 = Topic("test.some.topic.2", TopicConfiguration("state", Some("compact"), Some(1), Some(888888), Some(1)))
+  val topic3 = Topic("test.some.topic.3", TopicConfiguration("event", Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic4 = Topic("test.some.topic.4", TopicConfiguration("event", Some("delete"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType))
   val topic4_id = UUID.randomUUID.toString
   val schema = SchemaRequest("testSchema", 1)
   val mapping = TopicSchemaMapping(topic1.name, schema)
@@ -55,8 +58,20 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     conf = app.injector.instanceOf[Configuration]
     db.withTransaction { implicit conn =>
       SQL"""
-           insert into topic (topic_id, cluster, topic, description, organization, partitions, replicas, retention_ms, cleanup_policy) values
-           ($topic4_id, $cluster, ${topic4.name}, ${topic4.description}, ${topic4.organization}, ${topic4.config.partitions}, ${topic4.config.replicas}, ${topic4.config.retentionMs}, ${topic4.config.cleanupPolicy});
+           insert into topic_config (name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
+           values ('state', $cluster,
+           'A compacted topic with infinite retention, for keeping state of one type. Topic Key Type cannot be NONE. Only one value schema mapping will be allowed.',
+            ${stateConfigSet.cleanupPolicy}, ${stateConfigSet.partitions}, ${stateConfigSet.retentionMs} , ${stateConfigSet.replicas}, now());
+           insert into topic_config (name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
+           values ('ledger', $cluster,
+           'A non-compacted audit-log style topic for tracking changes in one value type. Only one value schema mapping will be allowed.',
+           ${ledgerConfigSet.cleanupPolicy}, ${ledgerConfigSet.partitions}, ${ledgerConfigSet.retentionMs} , ${ledgerConfigSet.replicas}, now());
+           insert into topic_config (name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
+           values ('event', $cluster,
+           'A non-compacted event-stream style topic which may contain multiple types of values. Multiple value schema mapping will be allowed.',
+           ${eventConfigSet.cleanupPolicy}, ${eventConfigSet.partitions}, ${eventConfigSet.retentionMs} , ${eventConfigSet.replicas}, now());
+           insert into topic (topic_id, cluster, topic, config_name, partitions, replicas, retention_ms, cleanup_policy) values
+           ($topic4_id, $cluster, ${topic4.name}, ${topic4.config.name}, ${topic4.config.partitions}, ${topic4.config.replicas}, ${topic4.config.retentionMs}, ${topic4.config.cleanupPolicy});
            insert into topic_key_mapping (cluster, topic_id, key_type, schema, version) values
            ($cluster, ${topic4_id}, ${avroTopicKeyType.keyType.toString}, ${avroTopicKeyType.schema}, ${avroTopicKeyType.version});
         """.execute()
@@ -66,6 +81,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   override def afterAll(): Unit = {
     db.withTransaction { implicit conn =>
       SQL"""
+           delete from TOPIC_CONFIG;
            delete from TOPIC_KEY_MAPPING;
            delete from TOPIC_SCHEMA_MAPPING;
            delete from TOPIC;
@@ -116,9 +132,10 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   "Topic Controller #create" must {
     "create a topic in kafka cluster and database" in {
       val result = createTopic(topic1)
-      result.json mustBe Json.toJson(TopicResponse(topic1))
+      val expectedTopic = topic1.copy(config = ledgerConfigSet)
+      result.json mustBe Json.toJson(TopicResponse(expectedTopic))
       topicExistsInKafka(topic1.name) mustBe true
-      getTopicFromDB(topic1.name) mustBe Some(topic1)
+      getTopicFromDB(topic1.name) mustBe Some(expectedTopic)
     }
   }
 
@@ -126,7 +143,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     "get a list of all topics" in {
       val futureResult = wsUrl(s"/v1/kafka/topics").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic4), Json.toJson(topic1)))
+      val expectedJson = Json.obj("topics" -> Seq(Json.toJson(topic4), Json.toJson(topic1.copy(config = ledgerConfigSet))))
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
@@ -135,7 +152,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     "get a single topic by name" in {
       val futureResult = wsUrl(s"/v1/kafka/topics/${topic1.name}").get()
       val result = futureResult.futureValue
-      val expectedJson = Json.toJson(TopicResponse(topic1))
+      val expectedJson = Json.toJson(TopicResponse(topic1.copy(config = ledgerConfigSet)))
 
       Status(result.status) mustBe Ok
       result.json mustBe expectedJson
@@ -267,6 +284,32 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
         .post(Json.parse(req)).futureValue
       println(s"${result.status}: ${result.body}")
       Status(result.status) mustBe BadRequest
+    }
+  }
+
+  "Topic Controller #getAllConfigSets" must {
+    "return Ok and return list of Config Sets" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/configs")
+        .get().futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+      (result.json \ "configs").as[List[TopicConfiguration]] mustBe List(stateConfigSet, ledgerConfigSet, eventConfigSet)
+    }
+  }
+
+  "Topic Controller #getConfigSet" must {
+    "return Ok and return Config Set" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/configs/ledger")
+        .get().futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+      (result.json \ "config").as[TopicConfiguration] mustBe ledgerConfigSet
+    }
+    "return Not Found when config set does not exist" in {
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/configs/ledger2")
+        .get().futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe NotFound
     }
   }
 }

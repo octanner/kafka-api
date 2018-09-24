@@ -15,9 +15,9 @@ class TopicDao {
   def insert(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String)(implicit conn: Connection) = {
     SQL"""
         insert into TOPIC (topic, partitions, replicas, retention_ms, cleanup_policy, created_timestamp,
-        cluster, organization, description) values
+        cluster) values
         (${topic.name}, ${partitions}, ${replicas}, ${retentionMs}, ${cleanupPolicy},
-        ${DateTime.now().toDate}, ${cluster}, ${topic.organization}, ${topic.description})
+        ${DateTime.now().toDate}, ${cluster})
       """
       .execute()
   }
@@ -78,11 +78,25 @@ class TopicDao {
       .execute()
   }
 
-  val topicConfigColumns = "cleanup_policy, partitions, retention_ms, replicas"
-  val topicKeyTypeColumns = "key_type, schema, version"
-  val topicColumns = s"topic, description, organization, $topicConfigColumns, $topicKeyTypeColumns"
+  def getConfigSet(cluster: String, configName: String)(implicit connection: Connection): Option[TopicConfiguration] = {
+    SQL"""
+         SELECT #${topicConfigColumns} FROM TOPIC_CONFIG where cluster=$cluster AND name=$configName;
+      """
+      .as(topicConfigParser.singleOpt)
+  }
 
-  implicit val topicConfigParser = Macro.parser[TopicConfiguration]("cleanup_policy", "partitions", "retention_ms", "replicas")
+  def getAllConfigSets(cluster: String)(implicit connection: Connection): Seq[TopicConfiguration] = {
+    SQL"""
+         SELECT #${topicConfigColumns} FROM TOPIC_CONFIG where cluster=$cluster;
+      """
+      .as(topicConfigParser.*)
+  }
+
+  val topicConfigColumns = "name, cleanup_policy, partitions, retention_ms, replicas"
+  val topicKeyTypeColumns = "key_type, schema, version"
+  val topicColumns = s"topic, config_name as $topicConfigColumns, $topicKeyTypeColumns"
+
+  implicit val topicConfigParser = Macro.parser[TopicConfiguration]("name", "cleanup_policy", "partitions", "retention_ms", "replicas")
   implicit val schemaParser = Macro.parser[SchemaRequest]("schema", "version")
   implicit val topicSchemaMappingParser = Macro.parser[TopicSchemaMapping]("topic", "schema", "version")
   implicit val keyTypeParser: Column[KeyType] = Column.nonNull { (value, _) =>
@@ -94,9 +108,9 @@ class TopicDao {
   implicit val topicKeyMappingParser = Macro.parser[TopicKeyMapping]("topic_id", "key_type", "schema", "version")
   implicit val basicTopicInfoParser = Macro.parser[BasicTopicInfo]("topic_id", "topic", "cluster")
   implicit val topicParser: RowParser[Topic] =
-    (str("topic") ~ str("description") ~ str("organization") ~ topicConfigParser ~ get[Option[String]]("key_type") ~ get[Option[String]]("schema") ~ get[Option[Int]]("version")) map {
-      case topic ~ descr ~ org ~ topicConfig ~ keyTypeOpt ~ schemaOpt ~ versionsOpt =>
+    (str("topic") ~ topicConfigParser ~ get[Option[String]]("key_type") ~ get[Option[String]]("schema") ~ get[Option[Int]]("version")) map {
+      case topic ~ topicConfig ~ keyTypeOpt ~ schemaOpt ~ versionsOpt =>
         var keyType = keyTypeOpt.map { k => KeyType.values.find(_.toString == k.toUpperCase).getOrElse(throw InvalidKeyTypeException(s"Invalid key type `$k`")) }
-        Topic(topic, descr, org, topicConfig, keyType.map { k => TopicKeyType(k, schemaOpt, versionsOpt) })
+        Topic(topic, topicConfig, keyType.map { k => TopicKeyType(k, schemaOpt, versionsOpt) })
     }
 }

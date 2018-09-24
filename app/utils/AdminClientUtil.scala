@@ -36,7 +36,6 @@ class AdminClientUtil @Inject() (conf: Configuration) {
           s"""org.apache.kafka.common.security.plain.PlainLoginModule required username="${username.getOrElse("")}" password="${password.getOrElse("")}";""")
       case _ =>
     }
-    logger.info(s"adminClientProps: $props")
     AdminClient.create(props)
   }
 
