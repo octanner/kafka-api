@@ -7,15 +7,16 @@ import play.api.libs.json.Reads._
 import play.api.libs.json._
 
 object Models {
-  case class TopicConfiguration(cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
+  case class TopicConfiguration(name: String, cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
   case class TopicKeyType(keyType: KeyType, schema: Option[String], version: Option[Int])
-  case class Topic(name: String, description: String, organization: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None)
+  case class Topic(name: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None)
   case class BasicTopicInfo(id: String, name: String, cluster: String)
   case class AclCredentials(username: String, password: String)
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
   case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String], version: Option[Int])
 
   val topicConfigReads: Reads[TopicConfiguration] = (
+    (JsPath \ "name").read[String] and
     (JsPath \ "cleanup.policy").readNullable[String] and
     (JsPath \ "partitions").readNullable[Int] and
     (JsPath \ "retention.ms").readNullable[Long] and
@@ -23,6 +24,7 @@ object Models {
   )(TopicConfiguration.apply _)
 
   val topicConfigWrites: Writes[TopicConfiguration] = (
+    (JsPath \ "name").write[String] and
     (JsPath \ "cleanup.policy").writeNullable[String] and
     (JsPath \ "partitions").writeNullable[Int] and
     (JsPath \ "retention.ms").writeNullable[Long] and

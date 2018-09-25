@@ -20,3 +20,5 @@ GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions/:version   contro
 POST       /v1/kafka/cluster/:cluster/topic-schema-mapping                controllers.TopicController.createSchemaMapping(cluster: String)
 GET        /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings controllers.TopicController.getTopicSchemaMappings(cluster: String, topic: String)
 POST       /v1/kafka/cluster/:cluster/topic-key-mapping                   controllers.TopicController.createKeyMapping(cluster: String)
+GET        /v1/kafka/cluster/:cluster/configs                             controllers.TopicController.getAllConfigSets(cluster: String)
+GET        /v1/kafka/cluster/:cluster/configs/:name                       controllers.TopicController.getConfigSet(cluster: String, name: String)

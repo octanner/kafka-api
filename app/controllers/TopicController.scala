@@ -53,6 +53,14 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
     processRequest[TopicKeyMappingRequest](createTopicKeyMapping(cluster))
   }
 
+  def getAllConfigSets(cluster: String) = Action.async { implicit request =>
+    service.getAllConfigSets(cluster).map { configs => Ok(Json.obj("configs" -> configs)) }
+  }
+
+  def getConfigSet(cluster: String, name: String) = Action.async { implicit request =>
+    service.getConfigSet(cluster, name).map { config => Ok(Json.obj("config" -> config)) }
+  }
+
   private def createTopicSchemaMapping(cluster: String)(mapping: TopicSchemaMapping): Future[Result] = {
     service.createTopicSchemaMapping(cluster, mapping).map { m => Ok(Json.toJson(m)) }
   }

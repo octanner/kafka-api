@@ -33,10 +33,10 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   val username2 = "testusername1"
   val password = "testpassword"
   val password2 = "testpassword1"
-  val topic = Topic("test.some.topic", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic2 = Topic("test.some.topic.2", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic3 = Topic("test.some.topic.3", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic4 = Topic("test.some.topic.4", "Test topic creation", "testOrg", TopicConfiguration(Some("delete"), Some(1), Some(888888), Some(1)))
+  val topic = Topic("test.some.topic", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
+  val topic2 = Topic("test.some.topic.2", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
+  val topic3 = Topic("test.some.topic.3", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
+  val topic4 = Topic("test.some.topic.4", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
   val topicId = UUID.randomUUID.toString
   val topicId2 = UUID.randomUUID.toString
   val topicId3 = UUID.randomUUID.toString
@@ -54,6 +54,10 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     db.withTransaction { implicit conn =>
       SQL"""
+           insert into topic_config(name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
+           values ('state', $cluster,
+           'A compacted topic with infinite retention, for keeping state of one type. Topic Key Type cannot be NONE. Only one value schema mapping will be allowed.',
+           'compact', 3, -1, 3, now());
             insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
             ($topicId, $cluster, ${topic.name}, ${topic.config.partitions}, ${topic.config.replicas}, ${topic.config.retentionMs}, ${topic.config.cleanupPolicy});
             insert into topic (topic_id, cluster, topic, partitions, replicas, retention_ms, cleanup_policy) values
@@ -109,6 +113,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       SQL"""
             DELETE FROM acl_source;
             DELETE FROM acl;
+            DELETE FROM topic_config;
             DELETE FROM topic_schema_mapping;
             DELETE FROM topic_key_mapping;
             DELETE FROM topic;
