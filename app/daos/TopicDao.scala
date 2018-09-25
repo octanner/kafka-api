@@ -15,9 +15,9 @@ class TopicDao {
   def insert(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String)(implicit conn: Connection) = {
     SQL"""
         insert into TOPIC (topic, partitions, replicas, retention_ms, cleanup_policy, created_timestamp,
-        cluster) values
+        cluster, config_name) values
         (${topic.name}, ${partitions}, ${replicas}, ${retentionMs}, ${cleanupPolicy},
-        ${DateTime.now().toDate}, ${cluster})
+        ${DateTime.now().toDate}, ${cluster}, ${topic.config.name})
       """
       .execute()
   }
