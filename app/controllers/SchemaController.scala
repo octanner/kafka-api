@@ -22,8 +22,8 @@ class SchemaController @Inject() (service: SchemaRegistryService) extends Inject
     }
   }
 
-  def getSchema(cluster: String, schema: String, version: Int) = Action.async { implicit request =>
-    service.getSchema(cluster, schema, version).map { schemaResponse =>
+  def getSchema(cluster: String, schema: String) = Action.async { implicit request =>
+    service.getSchema(cluster, schema).map { schemaResponse =>
       Ok(Json.toJson(schemaResponse))
     }
   }

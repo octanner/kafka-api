@@ -33,13 +33,13 @@ class SchemaRegistryService @Inject() (conf: Configuration, ws: WSClient) extend
       }
   }
 
-  def getSchema(cluster: String, schema: String, version: Int): Future[SchemaResponse] = {
+  def getSchema(cluster: String, schema: String): Future[SchemaResponse] = {
     val schemaRegistryUrl = getSchemaRegistryUrl(cluster)
-    ws.url(s"$schemaRegistryUrl/subjects/${schema}/versions/$version")
+    ws.url(s"$schemaRegistryUrl/subjects/${schema}/versions/latest")
       .get()
       .map { response =>
         processGetResponse[SchemaResponse](response, "Failed Schema Registry Get Schema Service Call")
-          .getOrElse(throw ResourceNotFoundException(s"Schema not found for `$schema` version `$version`"))
+          .getOrElse(throw ResourceNotFoundException(s"Schema not found for `$schema`"))
       }
   }
 

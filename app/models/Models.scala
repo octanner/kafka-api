@@ -8,12 +8,12 @@ import play.api.libs.json._
 
 object Models {
   case class TopicConfiguration(name: String, cleanupPolicy: Option[String], partitions: Option[Int], retentionMs: Option[Long], replicas: Option[Int])
-  case class TopicKeyType(keyType: KeyType, schema: Option[String], version: Option[Int])
-  case class Topic(name: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None)
+  case class TopicKeyType(keyType: KeyType, schema: Option[String])
+  case class Topic(name: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None, schemas: Option[List[String]] = None, cluster: Option[String] = None)
   case class BasicTopicInfo(id: String, name: String, cluster: String)
   case class AclCredentials(username: String, password: String)
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
-  case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String], version: Option[Int])
+  case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String])
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "name").read[String] and

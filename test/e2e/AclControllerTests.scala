@@ -6,7 +6,7 @@ import anorm._
 import daos.{AclDao, TopicDao}
 import models.AclRole
 import models.Models.{Acl, AclCredentials, Topic, TopicConfiguration}
-import models.http.HttpModels.{AclRequest, AclResponse}
+import models.http.HttpModels.AclRequest
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.acl._
@@ -69,14 +69,14 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
             insert into topic_key_mapping (cluster, topic_id, key_type) values
             ($cluster, ${topicId}, 'NONE');
-            insert into topic_schema_mapping (cluster, topic_id, schema, version) values
-            ($cluster, ${topicId}, 'testschema', 1);
+            insert into topic_schema_mapping (cluster, topic_id, schema) values
+            ($cluster, ${topicId}, 'testschema');
 
             insert into topic_key_mapping (cluster, topic_id, key_type) values
             ($cluster, ${topicId2}, 'NONE');
 
-            insert into topic_schema_mapping (cluster, topic_id, schema, version) values
-            ($cluster, ${topicId3}, 'testschema', 1);
+            insert into topic_schema_mapping (cluster, topic_id, schema) values
+            ($cluster, ${topicId3}, 'testschema');
 
             insert into acl_source (username, password, cluster, claimed) values ($username, $password, $cluster, false);
             insert into acl_source (username, password, cluster, claimed) values ($username2, $password2, $cluster, false);

@@ -74,13 +74,13 @@ class SchemaControllerTests extends IntTestSpec with BeforeAndAfterEach with Moc
   "SchemaController #getSchema" must {
     "return Ok and return the schema name, version and schema" in {
       val schemaName = "test.schema1"
-      val version = 1
+      val version = 2
       val schema = """{"type": "string"}"""
-      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/$schemaName/versions/$version"
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/$schemaName/versions/latest"
       val resp = Json.toJson(SchemaResponse(schemaName, version, schema))
       setMockRequestResponseExpectations(url, 200, resp)
 
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/schemas/$schemaName/versions/$version").get().futureValue
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/schemas/$schemaName").get().futureValue
       println(s"${result.status}; ${result.body}")
       Status(result.status) mustBe Ok
       result.json mustBe resp

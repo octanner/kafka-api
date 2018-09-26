@@ -36,7 +36,7 @@ class TopicService @Inject() (
 
     Future {
       val configSet = db.withConnection { implicit conn => dao.getConfigSet(cluster, topic.config.name) }
-            .getOrElse(throw new UndefinedResourceException(s"Config Set not yet setup for cluster `$cluster` and config name `${topic.config.name}`"))
+        .getOrElse(throw new UndefinedResourceException(s"Config Set not yet setup for cluster `$cluster` and config name `${topic.config.name}`"))
       val partitions = topic.config.partitions.getOrElse(configSet.partitions.getOrElse(
         conf.get[Int](cluster.toLowerCase + DEFAULT_PARTITIONS_CONFIG)))
       val replicas = topic.config.replicas.getOrElse(configSet.replicas.getOrElse(
@@ -54,7 +54,7 @@ class TopicService @Inject() (
         case Success(_) =>
           createTopicInDB(cluster, topic, partitions, replicas, retentionMs, cleanupPolicy)
           logger.info(s"""Successfully Created Topic ${topic.name} with ${partitions} partitions, ${replicas} replicas, ${retentionMs} retention ms, "${cleanupPolicy}" cleanup policy""")
-          topic.copy(config = topicConfig)
+          topic.copy(config = topicConfig, cluster = Some(cluster))
         case Failure(e: ExecutionException) if e.getCause.isInstanceOf[TopicExistsException] =>
           logger.error(s"""Topic "${topic.name}" already exists""")
           topic.copy(config = topicConfig)
@@ -71,8 +71,8 @@ class TopicService @Inject() (
     Future {
       val topic = db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, mapping.topic) }
         .getOrElse(throw ResourceNotFoundException(s"Topic `${mapping.topic}` not found in cluster `$cluster`"))
-      for (schema <- schemaSvc.getSchema(cluster, mapping.schema.name, mapping.schema.version)) yield {
-        val validatedSchemaRequest = SchemaRequest(schema.subject, schema.version)
+      for (schema <- schemaSvc.getSchema(cluster, mapping.schema.name)) yield {
+        val validatedSchemaRequest = SchemaRequest(schema.subject)
         db.withTransaction { implicit conn =>
           dao.upsertTopicSchemaMapping(cluster, topic.id, mapping.copy(schema = validatedSchemaRequest))
         }
@@ -133,6 +133,14 @@ class TopicService @Inject() (
     }
   }
 
+  def getTopicSchemaMappings(topic: String): Future[List[String]] = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getTopicSchemaMappings(topic)
+      }
+    }
+  }
+
   def createTopicKeyMapping(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest) = {
     val topicFut = Future {
       db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, topicKeyMappingRequest.topic) }
@@ -142,7 +150,7 @@ class TopicService @Inject() (
     } yield {
       val topic = topicOpt.getOrElse(throw ResourceNotFoundException(s"Topic `${topicKeyMappingRequest.topic}` Not Found in cluster ${cluster}"))
       val topiKeyMapping = TopicKeyMapping(topic.id, topicKeyMappingRequest.keyType,
-        topicKeyMappingRequest.schema.map(_.name), topicKeyMappingRequest.schema.map(_.version))
+        topicKeyMappingRequest.schema.map(_.name))
 
       db.withTransaction { implicit conn =>
         Try(dao.insertTopicKeyMapping(cluster, topiKeyMapping)) match {
