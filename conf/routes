@@ -16,7 +16,7 @@ DELETE     /v1/kafka/acls/:id                                             contro
 
 GET        /v1/kafka/cluster/:cluster/schemas                             controllers.SchemaController.getSchemas(cluster: String)
 GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions            controllers.SchemaController.getSchemaVersions(cluster: String, schema: String)
-GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions/:version   controllers.SchemaController.getSchema(cluster: String, schema: String, version: Int)
+GET        /v1/kafka/cluster/:cluster/schemas/:schema                     controllers.SchemaController.getSchema(cluster: String, schema: String)
 POST       /v1/kafka/cluster/:cluster/topic-schema-mapping                controllers.TopicController.createSchemaMapping(cluster: String)
 GET        /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings controllers.TopicController.getTopicSchemaMappings(cluster: String, topic: String)
 POST       /v1/kafka/cluster/:cluster/topic-key-mapping                   controllers.TopicController.createKeyMapping(cluster: String)

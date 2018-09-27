@@ -27,9 +27,20 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   }
 
   def getTopicInfo(topicName: String) = Action.async { implicit request =>
-    service.getTopic(topicName).map {
-      case Some(topic) => Ok(Json.toJson(TopicResponse(topic)))
-      case None        => NotFound(s"Cannot find topic '$topicName'")
+    for {
+      topicOpt <- service.getTopic(topicName)
+      schemaMappings <- service.getTopicSchemaMappings(topicName)
+    } yield {
+
+      topicOpt match {
+        case Some(topic) =>
+          schemaMappings match {
+            case List() => Ok(Json.toJson(TopicResponse(topic)))
+            case mappings =>
+              Ok(Json.toJson(TopicResponse(topic.copy(schemas = Some(mappings)))))
+          }
+        case None => NotFound(s"Cannot find topic '$topicName'")
+      }
     }
   }
 
@@ -77,7 +88,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
     if (topicKeyMappingRequest.keyType == KeyType.AVRO) {
       val schema = topicKeyMappingRequest.schema.getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
-      schemaService.getSchema(cluster, schema.name, schema.version).transform {
+      schemaService.getSchema(cluster, schema.name).transform {
         case Success(_) => Success(true)
         case Failure(e) =>
           logger.error(e.getMessage, e)
