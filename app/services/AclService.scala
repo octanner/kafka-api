@@ -4,24 +4,56 @@ import java.util.concurrent.TimeUnit
 
 import daos.{ AclDao, TopicDao }
 import javax.inject.Inject
+import models.{ AclRole, KeyType }
 import models.Models.{ Acl, TopicKeyMapping }
 import models.http.HttpModels.{ AclRequest, TopicSchemaMapping }
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import play.api.Logger
+import play.api.{ Configuration, Logger }
 import play.api.db.Database
 import utils.AdminClientUtil
 import utils.Exceptions.{ InvalidRequestException, InvalidUserException, ResourceNotFoundException }
 
+import scala.collection.mutable.Map
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
-class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util: AdminClientUtil) {
-
+class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util: AdminClientUtil, conf: Configuration) {
   val logger = Logger(this.getClass)
   val VALID_TOPIC_KEY_VALUE_MAPPINGS = "valid"
+
+  def getConfigMap(cluster: String, user: String): Future[Map[String, String]] = {
+    val configMap = getKafkaHostConfigMap(cluster)
+    for {
+      cred <- getCredentials(cluster, user)
+      acls <- getAclsForUsername(cluster, user)
+    } yield {
+      configMap += ("KAFKA_USERNAME" -> cred.username)
+      configMap += ("KAFKA_PASSWORD" -> cred.password)
+
+      val producers = acls.filter(_.role == AclRole.PRODUCER)
+      val consumers = acls.filter(_.role == AclRole.CONSUMER)
+      configMap += ("KAFKA_PRODUCER_TOPICS" -> producers.map(_.topic).mkString(","))
+      configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).mkString(","))
+      acls.foreach { acl =>
+        db.withConnection { implicit conn =>
+          val topicConfigName = acl.topic.toUpperCase().replaceAll("\\.", "_")
+          val schemaMappings = topicDao.getTopicSchemaMappings(cluster, acl.topic)
+          val keyType = topicDao.getTopicKeyMapping(cluster, acl.topic) match {
+            case Some(k) if k == KeyType.AVRO => s"""${k.keyType.toString}:${k.schema.getOrElse("")}"""
+            case Some(k)                      => k.keyType.toString
+            case None                         => ""
+          }
+          configMap += (topicConfigName + "_TOPIC_NAME" -> acl.topic)
+          configMap += (topicConfigName + "_TOPIC_KEY_TYPE" -> keyType)
+          configMap += (topicConfigName + "_TOPIC_SCHEMAS" -> schemaMappings.map { sm => sm.schema.name }.mkString(","))
+        }
+      }
+      configMap
+    }
+  }
 
   def getCredentials(cluster: String, user: String) = {
     Future {
@@ -35,6 +67,37 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
         }
       }
     }
+  }
+
+  def getAclsForUsername(cluster: String, user: String) = {
+    Future {
+      db.withConnection { implicit conn =>
+        dao.getAclsForUsername(cluster, user)
+      }
+    }
+  }
+
+  def getKafkaHostConfigMap(cluster: String): Map[String, String] = {
+    val configMap = collection.mutable.Map[String, String]()
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.hostname").map { h => configMap += ("KAFKA_HOSTNAME" -> h) }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.port").map { p => configMap += ("KAFKA_PORT" -> p) }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.location").map { l => configMap += ("KAFKA_LOCATION" -> l) }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.avro.registry.location").map { al =>
+      configMap += ("KAFKA_AVRO_REGISTRY_LOCATION" -> al)
+    }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.avro.registry.hostname").map { ah =>
+      configMap += ("KAFKA_AVRO_REGISTRY_HOSTNAME" -> ah)
+    }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.avro.registry.port").map { ap =>
+      configMap += ("KAFKA_AVRO_REGISTRY_PORT" -> ap)
+    }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.sasl.mechanism").map { sm =>
+      configMap += ("KAFKA_SASL_MECHANISM" -> sm)
+    }
+    conf.getOptional[String](cluster.toLowerCase() + ".kafka.security.protocol").map { sp =>
+      configMap += ("KAFKA_SECURITY_PROTOCOL" -> sp)
+    }
+    configMap
   }
 
   def getAclsByTopic(cluster: String, topic: String) = {
