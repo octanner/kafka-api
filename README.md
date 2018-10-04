@@ -7,13 +7,14 @@ Runs a REST API to offer management of Kafka topics, users, and ACLs, schema reg
 ## Endpoints
 
 ```
+get /octhc
 get /v1/kafka/topics/:topic
 get /v1/kafka/topics
 get /v1/kafka/cluster/:cluster/credentials/:user
 get /v1/kafka/cluster/:cluster/acls
 get /v1/kafka/cluster/:cluster/schemas
 get /v1/kafka/cluster/:cluster/schemas/:schema/versions
-get /v1/kafka/cluster/:cluster/schemas/:schema/versions/:version
+get /v1/kafka/cluster/:cluster/schemas/:schema
 get /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings
 post /v1/kafka/cluster/:cluster/topic
 post /v1/kafka/cluster/:cluster/user
@@ -90,11 +91,19 @@ None
       "description":"Test topic creation",
       "organization":"testOrg",
       "config":{  
+         "name":"ledger",
          "cleanup.policy":"delete",
          "partitions":1,
          "retention.ms":888888,
          "replicas":1
-      }
+      },
+      "keyMapping": {
+         "keyType": "string"
+      },
+      "schemas": [
+         "BMacTest1-key"
+      ],
+      "cluster": "maru"
    }
 }
 ```
@@ -119,12 +128,17 @@ None
          "name":"test.some.topic",
          "description":"Test topic creation",
          "organization":"testOrg",
-         "config":{  
+         "config":{
+            "name":"ledger",  
             "cleanup.policy":"delete",
             "partitions":1,
             "retention.ms":888888,
             "replicas":1
-         }
+         },
+         "keyMapping": {
+            "keyType": "string"
+         },
+         "cluster": "maru"
       }
    ]
 }
@@ -143,12 +157,26 @@ None
 #### Response
 ```Json
 {  
-   "username":"testusername",
-   "password":"testpassword"
+   "KAFKA_LOCATION":"localhost:6001",
+   "KAFKA_USERNAME":"testusername",
+   "KAFKA_CONSUMER_TOPICS":"test.some.topic",
+   "KAFKA_PORT":"6001",
+   "DEV_SOME_TOPIC_TOPIC_KEY_TYPE":"NONE",
+   "DEV_SOME_TOPIC_2_TOPIC_SCHEMAS":"",
+   "KAFKA_HOSTNAME":"localhost",
+   "KAFKA_AVRO_REGISTRY_LOCATION":"testLocation",
+   "KAFKA_AVRO_REGISTRY_PORT":"",
+   "KAFKA_PRODUCER_TOPICS":"test.some.topic.2",
+   "DEV_SOME_TOPIC_TOPIC_NAME":"test.some.topic",
+   "DEV_SOME_TOPIC_TOPIC_SCHEMAS":"testschema",
+   "DEV_SOME_TOPIC_2_TOPIC_KEY_TYPE":"NONE",
+   "KAFKA_PASSWORD":"testpassword",
+   "DEV_SOME_TOPIC_2_TOPIC_NAME":"test.some.topic.2",
+   "KAFKA_AVRO_REGISTRY_HOSTNAME":""
 }
 ```
 #### Description
-Endpoint to get credentials for a claimed user.
+Endpoint to get credentials / environment variables for a claimed user.
 #### Response Codes
 200: Ok with above response. 
 
@@ -241,14 +269,14 @@ Makes a rest call to cluster's schema registry to get all versions for the given
 
 ________
 
-### GET /v1/kafka/cluster/:cluster/schemas/:schema/versions/:version
+### GET /v1/kafka/cluster/:cluster/schemas/:schema
 #### Request Params 
 None
 #### Response
 ```Json
 {  
    "subject":"test.schema1",
-   "version":1,
+   "version":2,
    "schema":"{\"type\": \"string\"}"
 }
 ```
@@ -297,10 +325,11 @@ ________
       "description":"Test topic creation",
       "organization":"testOrg",
       "config":{  
-         "cleanup.policy":"delete",
-         "partitions":1,
-         "retention.ms":888888,
-         "replicas":1
+         "name":"compact",
+         "cleanup.policy":"compact", //optional
+         "partitions":1,             //optional
+         "retention.ms":-1,          //optional
+         "replicas":1                //optional
       }
    }
 }
@@ -313,10 +342,11 @@ ________
       "name":"test.some.topic",
       "description":"Test topic creation",
       "organization":"testOrg",
-      "config":{  
-         "cleanup.policy":"delete",
+      "config":{ 
+         "name": "compact" 
+         "cleanup.policy":"compact",
          "partitions":1,
-         "retention.ms":888888,
+         "retention.ms":-1,
          "replicas":1
       }
    }
@@ -378,8 +408,7 @@ Create Acl for a topic, user and role
 {
    "topic":"test.some.topic.1",
    "schema":{
-      "name":"testSchema",
-      "version":1
+      "name":"testSchema"
    }
 }
 ```
@@ -388,8 +417,7 @@ Create Acl for a topic, user and role
 {
    "topic":"test.some.topic.1",
    "schema":{
-      "name":"testSchema",
-      "version":1
+      "name":"testSchema"
    }
 }
 ```
@@ -411,8 +439,7 @@ Create Acl for a topic, user and role
    "topic":"test.some.topic.3",
    "keyType":"AVRO", //"None", "String" Or "Avro"(Schema is required for Avro)
    "schema":{  
-      "name":"testSchema",
-      "version":1
+      "name":"testSchema"
    }
 }
 ```

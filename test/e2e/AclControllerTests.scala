@@ -306,10 +306,36 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
   "AclController #getCredentials" must {
     "return Ok with credentials when the user is claimed" in {
+      val aclId1 = db.withConnection { implicit conn =>
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER))
+      }
+      val aclId2 = db.withConnection { implicit conn =>
+        dao.addPermissionToDb(cluster, AclRequest(topic2.name, username, AclRole.PRODUCER))
+      }
+
+      val expectedMap = Map[String, String](
+        ("KAFKA_PORT" -> conf.get[String]("test.kafka.port")),
+        ("KAFKA_LOCATION" -> conf.get[String]("test.kafka.location")),
+        ("KAFKA_HOSTNAME" -> conf.get[String]("test.kafka.hostname")),
+        ("KAFKA_AVRO_REGISTRY_LOCATION" -> conf.get[String]("test.kafka.avro.registry.location")),
+        ("KAFKA_AVRO_REGISTRY_PORT" -> conf.get[String]("test.kafka.avro.registry.port")),
+        ("KAFKA_AVRO_REGISTRY_HOSTNAME" -> conf.get[String]("test.kafka.avro.registry.hostname")),
+        ("KAFKA_USERNAME" -> username),
+        ("KAFKA_PASSWORD" -> password),
+        ("KAFKA_CONSUMER_TOPICS" -> topic.name),
+        ("KAFKA_PRODUCER_TOPICS" -> topic2.name),
+        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_NAME" -> topic.name),
+        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_SCHEMAS" -> "testschema"),
+        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_NAME" -> topic2.name),
+        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_SCHEMAS" -> "")
+      )
+
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe Ok
-      result.json.as[AclCredentials] mustBe AclCredentials(username, password)
+      result.json.as[Map[String, String]] mustBe expectedMap
     }
 
     "return Bad Request when the user is unclaimed" in {

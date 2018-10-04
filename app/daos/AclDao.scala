@@ -62,6 +62,16 @@ class AclDao {
       """.as(aclParser.*)
   }
 
+  def getAclsForUsername(cluster: String, username: String)(implicit conn: Connection) = {
+    SQL"""
+          SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role
+          FROM acl
+          INNER JOIN acl_source ON acl.user_id = acl_source.user_id
+          INNER JOIN topic ON acl.topic_id = topic.topic_id
+          WHERE acl.cluster = $cluster AND acl_source.username = $username;
+      """.as(aclParser.*)
+  }
+
   def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
     SQL"""
           SELECT acl.acl_id as id, username, topic, acl.cluster as cluster, role
