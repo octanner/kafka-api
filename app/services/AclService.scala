@@ -133,7 +133,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
         case VALID_TOPIC_KEY_VALUE_MAPPINGS =>
           Try(dao.addPermissionToDb(cluster, aclRequest)) match {
             case Success(id) =>
-              addPermissionToKafka(cluster, aclRequest)
+              createKafkaAcl(cluster, aclRequest)
               id
             case Failure(e) =>
               logger.error(s"Failed to create permission in DB: ${e.getMessage}")
@@ -146,8 +146,14 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     }
   }
 
-  def addPermissionToKafka(cluster: String, aclRequest: AclRequest) = {
-    Try(createKafkaAcl(cluster, aclRequest)) match {
+  def createKafkaAcl(cluster: String, aclRequest: AclRequest) = {
+    val topicAclBinding = createAclBinding(aclRequest, ResourceType.TOPIC, aclRequest.topic, host = "*")
+    val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = "*", host = "*")
+
+    val adminClient = util.getAdminClient(cluster)
+    val aclCreationResponse = adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+    adminClient.close()
+    Try(aclCreationResponse.get) match {
       case Success(_) =>
         logger.info(s"Successfully added permission for '${aclRequest.user}' with role '${aclRequest.role}' " +
           s"on topic '${aclRequest.topic}' in cluster '$cluster' to Kafka")
@@ -161,31 +167,12 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     }
   }
 
-  def createKafkaAcl(cluster: String, aclRequest: AclRequest) = {
-    val topicAclBinding = createAclBinding(aclRequest, ResourceType.TOPIC, aclRequest.topic, host = "*")
-    val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = "*", host = "*")
-
-    val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = Try(adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
-      .get(500, TimeUnit.MILLISECONDS))
-    adminClient.close()
-    aclCreationResponse.get
-  }
-
   def deleteAcl(id: String) = {
     Future {
       db.withTransaction { implicit conn =>
         val acl = dao.getAcl(id).getOrElse(throw ResourceNotFoundException(s"Acl not found for id $id"))
         dao.deleteAcl(id)
-        Try(deleteKafkaAcl(acl)) match {
-          case Success(_) =>
-            logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
-              s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka")
-          case Failure(e) =>
-            logger.error(s"Unable to delete permission for '${acl.user}' with role '${acl.role.role}' " +
-              s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka", e)
-            throw e
-        }
+        deleteKafkaAcl(acl)
       }
     }
   }
@@ -195,10 +182,18 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = "*", host = "*")
 
     val adminClient = util.getAdminClient(acl.cluster)
-    val aclCreationResponse = Try(adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
-      .get(500, TimeUnit.MILLISECONDS))
+    val aclDeletionResponse = adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
     adminClient.close()
-    aclCreationResponse.get
+    Try(aclDeletionResponse.get) match {
+      case Success(bindings) =>
+        logger.info(s"Successfully deleted permissions for '${acl.user}' with role '${acl.role.role}' " +
+          s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka")
+        logger.info(s"Delete Response : $bindings")
+      case Failure(e) =>
+        logger.error(s"Unable to delete permission for '${acl.user}' with role '${acl.role.role}' " +
+          s"on topic '${acl.topic}' in cluster '${acl.cluster}' to Kafka", e)
+        throw e
+    }
   }
 
   private def createAclBinding(aclRequest: AclRequest, resourceType: ResourceType, resourceName: String, host: String) = {

@@ -72,6 +72,12 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
     service.getConfigSet(cluster, name).map { config => Ok(Json.obj("config" -> config)) }
   }
 
+  def deleteTopic(cluster: String, topic: String) = Action.async { implicit request =>
+    service.deleteTopic(cluster, topic).map { _ =>
+      Ok
+    }
+  }
+
   private def createTopicSchemaMapping(cluster: String)(mapping: TopicSchemaMapping): Future[Result] = {
     service.createTopicSchemaMapping(cluster, mapping).map { m => Ok(Json.toJson(m)) }
   }

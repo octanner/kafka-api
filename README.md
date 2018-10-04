@@ -8,6 +8,7 @@ Runs a REST API to offer management of Kafka topics, users, and ACLs, schema reg
 
 ```
 get /octhc
+get /v1/kafka/clusters
 get /v1/kafka/topics/:topic
 get /v1/kafka/topics
 get /v1/kafka/cluster/:cluster/credentials/:user
@@ -22,6 +23,7 @@ post /v1/kafka/cluster/:cluster/acls
 post /v1/kafka/cluster/:cluster/topic-schema-mapping
 post /v1/kafka/cluster/:cluster/topic-key-mapping
 delete /v1/kafka/acls/:id
+delete /v1/kafka/cluster/:cluster/topics/:topic
 ```
 
 ## Runtime Environment Variables
@@ -76,9 +78,36 @@ sbt run
 ```
 
 ##DB setup
-Insert all the the user names and passwords for all required kafka cluster(ex: dev, sandbox, nonprod, prod) to `acl_source` database table, with claimed being false. 
+Insert all the the user names and passwords for all required kafka cluster(ex: dev, sandbox, nonprod, prod) to `acl_source` database table, with claimed being false.
+Insert all cluster name and description to `CLUSTER` table  
 
 ##Endpoints Description
+
+### GET /v1/kafka/clusters
+#### Request Params 
+None
+#### Response
+```json
+[
+   {
+      "name": "nonprod",
+      "description": "Non Prod Kafka Cluster with 3 Brokers"
+   },
+   {
+      "name": "prod",
+      "description": "Production Kafka Cluster"
+   }
+]
+```
+#### Description
+Get All Clusters
+#### Response Codes
+200: Ok with response Json
+
+404: Cannot find topic :topic
+
+500: Internal Server Error
+______
 
 ### GET /v1/kafka/topics/:topic
 #### Request Params 
@@ -462,6 +491,17 @@ None
 
 #### Description
 Delete the Acl using Acl id.
+ 
+#### Response Codes
+200
+
+### delete /v1/kafka/cluster/:cluster/topics/:topic
+#### Request Params 
+None
+#### Response
+
+#### Description
+Deletes the topic. Also Deletes Acls, Topic Schema Mappings, Topic Key Mappings. 
  
 #### Response Codes
 200

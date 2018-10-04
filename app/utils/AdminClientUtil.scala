@@ -1,6 +1,6 @@
 package utils
 
-import java.util.Properties
+import java.util.{ Properties, UUID }
 
 import javax.inject.Inject
 import org.apache.kafka.clients.CommonClientConfigs
@@ -22,7 +22,7 @@ class AdminClientUtil @Inject() (conf: Configuration) {
 
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
-    props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
+    props.put(AdminClientConfig.CLIENT_ID_CONFIG, s"${ADMIN_CLIENT_ID}-${UUID.randomUUID.toString}")
     kafkaSecurityProtocol.map {
       props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, _)
     }
