@@ -3,24 +3,25 @@ package e2e
 import java.util.{ Properties, UUID }
 
 import anorm._
-import daos.TopicDao
-import models.KeyType
+import daos.{ AclDao, TopicDao }
 import models.KeyType._
-import models.Models.{ Topic, TopicConfiguration, TopicKeyType }
+import models.Models.{ Acl, Topic, TopicConfiguration, TopicKeyMapping, TopicKeyType }
 import models.http.HttpModels.{ SchemaRequest, SchemaResponse, TopicKeyMappingRequest, TopicRequest, TopicResponse, TopicSchemaMapping }
+import models.{ AclRole, KeyType }
 import net.manub.embeddedkafka.EmbeddedKafka
 import org.apache.kafka.clients.admin.{ AdminClient, AdminClientConfig }
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.when
+import org.mockito.Mockito._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.mockito.MockitoSugar
+import play.api.Configuration
 import play.api.db.Database
-import play.api.mvc.Results._
 import play.api.inject.bind
 import play.api.inject.guice.GuiceableModule
 import play.api.libs.json.{ JsValue, Json }
 import play.api.libs.ws.{ WSClient, WSRequest, WSResponse }
-import play.api.{ Configuration, Logger }
+import play.api.mvc.Results._
+import services.AclService
 import utils.AdminClientUtil
 import utils.AdminClientUtil.ADMIN_CLIENT_ID
 
@@ -28,7 +29,9 @@ import scala.concurrent.Future
 
 class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with MockitoSugar with EmbeddedKafka {
   val mockWs = mock[WSClient]
+  var mockAclService = mock[AclService]
   val dao = new TopicDao()
+  val aclDao = new AclDao()
   val cluster = "test"
   val avroTopicKeyType = TopicKeyType(KeyType.AVRO, Some("Test.Schema.Key"))
   val ledgerConfigSet = TopicConfiguration("ledger", Some("delete"), Some(3), Some(2629740000L), Some(1))
@@ -41,6 +44,8 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val topic3 = Topic("test.some.topic.3", TopicConfiguration("event", Some("delete"), Some(1), Some(888888), Some(1)))
   val topic4 = Topic("test.some.topic.4", TopicConfiguration("event", Some("delete"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType), Some(List(schema.name)), Some(cluster))
   val topic4_id = UUID.randomUUID.toString
+  val username = "testuser"
+  val password = "testpass"
 
   val mapping = TopicSchemaMapping(topic1.name, schema)
   val keyMappingNone = TopicKeyMappingRequest(topic1.name, NONE, None)
@@ -51,7 +56,9 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   override def modulesToOverride: Seq[GuiceableModule] = Seq(
     bind[Database].toInstance(db),
     bind[TopicDao].toInstance(dao),
-    bind[WSClient].toInstance(mockWs)
+    bind[AclDao].toInstance(aclDao),
+    bind[WSClient].toInstance(mockWs),
+    bind[AclService].toInstance(mockAclService)
   )
 
   override def beforeAll() = {
@@ -64,18 +71,23 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
            values ('state', $cluster,
            'A compacted topic with infinite retention, for keeping state of one type. Topic Key Type cannot be NONE. Only one value schema mapping will be allowed.',
             ${stateConfigSet.cleanupPolicy}, ${stateConfigSet.partitions}, ${stateConfigSet.retentionMs} , ${stateConfigSet.replicas}, now());
+
            insert into topic_config (name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
            values ('ledger', $cluster,
            'A non-compacted audit-log style topic for tracking changes in one value type. Only one value schema mapping will be allowed.',
            ${ledgerConfigSet.cleanupPolicy}, ${ledgerConfigSet.partitions}, ${ledgerConfigSet.retentionMs} , ${ledgerConfigSet.replicas}, now());
+
            insert into topic_config (name, cluster, description, cleanup_policy, partitions, retention_ms, replicas, created_timestamp)
            values ('event', $cluster,
            'A non-compacted event-stream style topic which may contain multiple types of values. Multiple value schema mapping will be allowed.',
            ${eventConfigSet.cleanupPolicy}, ${eventConfigSet.partitions}, ${eventConfigSet.retentionMs} , ${eventConfigSet.replicas}, now());
+
            insert into topic (topic_id, cluster, topic, config_name, partitions, replicas, retention_ms, cleanup_policy) values
            ($topic4_id, $cluster, ${topic4.name}, ${topic4.config.name}, ${topic4.config.partitions}, ${topic4.config.replicas}, ${topic4.config.retentionMs}, ${topic4.config.cleanupPolicy});
+
            insert into topic_key_mapping (cluster, topic_id, key_type, schema) values
            ($cluster, ${topic4_id}, ${avroTopicKeyType.keyType.toString}, ${avroTopicKeyType.schema});
+
            insert into topic_schema_mapping (cluster, topic_id, schema) values
            ($cluster, ${topic4_id}, ${schema.name});
         """.execute()
@@ -89,6 +101,8 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
            delete from TOPIC_KEY_MAPPING;
            delete from TOPIC_SCHEMA_MAPPING;
            delete from TOPIC;
+           delete from ACL_SOURCE;
+           delete from ACL;
         """.execute()
     }
     EmbeddedKafka.stop()
@@ -117,7 +131,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     val kafkaHostName = conf.get[String](cluster.toLowerCase + AdminClientUtil.KAFKA_LOCATION_CONFIG)
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaHostName)
-    props.put(AdminClientConfig.CLIENT_ID_CONFIG, ADMIN_CLIENT_ID)
+    props.put(AdminClientConfig.CLIENT_ID_CONFIG, s"$ADMIN_CLIENT_ID-${UUID.randomUUID.toString}")
 
     val adminClient = AdminClient.create(props)
     val allTopics = adminClient.listTopics().names().get()
@@ -309,6 +323,42 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
         .get().futureValue
       println(s"${result.status}: ${result.body}")
       Status(result.status) mustBe NotFound
+    }
+  }
+
+  "Topic Controller #deleteTopic" must {
+    "delete database entries and topic in kafka" in {
+
+      val acl = Acl("1", username, topic1.name, cluster, AclRole.PRODUCER)
+      db.withTransaction { implicit conn =>
+        val topicInfo = dao.getBasicTopicInfo(cluster, topic1.name)
+        topicInfo must not be None
+        SQL"""
+          insert into acl_source (user_id, username, password, cluster, claimed)
+          values ('1', $username, $password, $cluster, true);
+          insert into acl(acl_id, user_id, topic_id, role, cluster) values
+          (${acl.id}, '1', ${topicInfo.get.id}, 'WRITE', $cluster);
+        """.execute()
+        dao.getTopicKeyMapping(cluster, topic1.name) mustBe Some(TopicKeyMapping(topicInfo.get.id, KeyType.NONE, None))
+        dao.getTopicSchemaMappings(cluster, topic1.name) mustBe List(mapping)
+        aclDao.getAclsForTopic(cluster, topic1.name).size mustBe 1
+      }
+      when(mockAclService.getAclsByTopic(cluster, topic1.name)) thenReturn Future.successful(List(acl))
+      when(mockAclService.deleteAcl("1")) thenReturn Future.successful(())
+
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/topics/${topic1.name}").delete()
+      val result = futureResult.futureValue
+
+      Status(result.status) mustBe Ok
+      db.withConnection { implicit conn =>
+        dao.getBasicTopicInfo(cluster, topic1.name) mustBe None
+        dao.getTopicKeyMapping(cluster, topic1.name) mustBe None
+        dao.getTopicSchemaMappings(cluster, topic1.name) mustBe List()
+        aclDao.getAclsForTopic(cluster, topic1.name) mustBe List()
+      }
+
+      topicExistsInKafka(topic1.name) mustBe false
+      verify(mockAclService).deleteAcl("1")
     }
   }
 }

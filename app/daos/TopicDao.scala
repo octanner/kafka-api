@@ -100,6 +100,27 @@ class TopicDao {
       .as(topicConfigParser.*)
   }
 
+  def deleteTopicKeyMapping(topicId: String)(implicit connection: Connection) = {
+    SQL"""
+        DELETE FROM TOPIC_KEY_MAPPING WHERE TOPIC_ID = $topicId
+      """
+      .execute()
+  }
+
+  def deleteTopicSchemaMapping(topicId: String)(implicit connection: Connection) = {
+    SQL"""
+        DELETE FROM TOPIC_SCHEMA_MAPPING WHERE TOPIC_ID = $topicId
+      """
+      .execute()
+  }
+
+  def deleteTopic(topicId: String)(implicit connection: Connection) = {
+    SQL"""
+        DELETE FROM TOPIC WHERE TOPIC_ID = $topicId
+      """
+      .execute()
+  }
+
   val topicConfigColumns = "name, cleanup_policy, partitions, retention_ms, replicas"
   val topicKeyTypeColumns = "key_type, schema"
   val topicColumns = s"topic, t.cluster as cluster, config_name as $topicConfigColumns, $topicKeyTypeColumns"

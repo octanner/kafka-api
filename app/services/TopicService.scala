@@ -22,11 +22,12 @@ import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
 class TopicService @Inject() (
-    db:        Database,
-    dao:       TopicDao,
-    conf:      Configuration,
-    util:      AdminClientUtil,
-    schemaSvc: SchemaRegistryService) {
+    db:         Database,
+    dao:        TopicDao,
+    aclService: AclService,
+    conf:       Configuration,
+    util:       AdminClientUtil,
+    schemaSvc:  SchemaRegistryService) {
   import TopicService._
 
   val logger = Logger(this.getClass)
@@ -50,16 +51,13 @@ class TopicService @Inject() (
         TopicConfig.CLEANUP_POLICY_CONFIG -> cleanupPolicy)
       val topicConfig = TopicConfiguration(topic.config.name, Some(cleanupPolicy), Some(partitions), Some(retentionMs), Some(replicas))
 
-      Try(createTopicInKafka(cluster, topicName, partitions, replicas, configs).get()) match {
-        case Success(_) =>
+      Try(createTopicInKafka(cluster, topicName, partitions, replicas, configs)) match {
+        case Success(true) =>
           createTopicInDB(cluster, topic, partitions, replicas, retentionMs, cleanupPolicy)
           logger.info(s"""Successfully Created Topic ${topic.name} with ${partitions} partitions, ${replicas} replicas, ${retentionMs} retention ms, "${cleanupPolicy}" cleanup policy""")
           topic.copy(config = topicConfig, cluster = Some(cluster))
-        case Failure(e: ExecutionException) if e.getCause.isInstanceOf[TopicExistsException] =>
-          logger.error(s"""Topic "${topic.name}" already exists""")
-          topic.copy(config = topicConfig)
-        case Failure(e: ExecutionException) =>
-          throw e.getCause
+        case Success(false) =>
+          topic.copy(config = topicConfig, cluster = Some(cluster))
         case Failure(e) =>
           logger.error(s"Failed to create topic: ${e.getMessage}", e)
           throw e
@@ -100,13 +98,24 @@ class TopicService @Inject() (
     topicName:    String,
     partitions:   Int,
     replicas:     Int,
-    topicConfigs: Map[String, String]): KafkaFuture[Void] = {
+    topicConfigs: Map[String, String]): Boolean = {
 
     val adminClient = util.getAdminClient(cluster)
     val topic = new NewTopic(topicName, partitions, replicas.toShort).configs(topicConfigs.asJava)
-    val topicCreationResult = Try(adminClient.createTopics(List(topic).asJava).all())
+    val topicCreationResult = adminClient.createTopics(List(topic).asJava).all()
     adminClient.close()
-    topicCreationResult.get
+    Try(topicCreationResult.get) match {
+      case Success(_) =>
+        true
+      case Failure(e: ExecutionException) if e.getCause.isInstanceOf[TopicExistsException] =>
+        logger.error(s"""Topic "${topic.name}" already exists""")
+        false
+      case Failure(e: ExecutionException) =>
+        throw e.getCause
+      case Failure(e) =>
+        logger.error(s"Failed to create topic: ${e.getMessage}", e)
+        throw e
+    }
   }
 
   def getTopic(topicName: String): Future[Option[Topic]] = {
@@ -114,6 +123,30 @@ class TopicService @Inject() (
       db.withConnection { implicit conn =>
         dao.getTopicInfo(topicName)
       }
+    }
+  }
+
+  def deleteTopic(cluster: String, topicName: String): Future[Unit] = {
+    val topicFut = Future {
+      db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, topicName) }
+    }
+    for {
+      topicOpt <- topicFut
+    } yield {
+
+      topicOpt.map { topic =>
+        aclService.getAclsByTopic(cluster, topicName).map { acls =>
+          val deleteAcls = for { acl <- acls } yield aclService.deleteAcl(acl.id)
+          Future.sequence(deleteAcls).map { _ =>
+            db.withTransaction { implicit conn =>
+              dao.deleteTopicKeyMapping(topic.id)
+              dao.deleteTopicSchemaMapping(topic.id)
+              dao.deleteTopic(topic.id)
+            }
+          }
+        }
+      }
+      deleteTopicInKafka(cluster, topicName)
     }
   }
 
@@ -177,6 +210,22 @@ class TopicService @Inject() (
       db.withConnection { implicit conn =>
         dao.getConfigSet(cluster, name).getOrElse(throw ResourceNotFoundException(s"Config Set not defined for cluster `$cluster` and name `$name`"))
       }
+    }
+  }
+
+  private def deleteTopicInKafka(
+    cluster:   String,
+    topicName: String): Unit = {
+
+    val adminClient = util.getAdminClient(cluster)
+    val topicDeletionResult = adminClient.deleteTopics(List(topicName).asJava).all()
+    adminClient.close()
+    Try(topicDeletionResult.get) match {
+      case Success(t) =>
+        logger.info(s"$t Successfully deleted topic `$topicName` in kafka cluster `$cluster`")
+      case Failure(e) =>
+        logger.error(s"Unable to delete topic `$topicName` in kafka cluster `$cluster`", e)
+        throw e
     }
   }
 

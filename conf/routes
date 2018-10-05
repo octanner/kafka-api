@@ -4,9 +4,12 @@
 
 GET        /octhc                                                         controllers.HealthController.health
 
+GET        /v1/kafka/clusters                                             controllers.ClusterController.getClusters
+
 POST       /v1/kafka/cluster/:cluster/topic                               controllers.TopicController.create(cluster: String)
 GET        /v1/kafka/topics/:topic                                        controllers.TopicController.getTopicInfo(topic: String)
 GET        /v1/kafka/topics                                               controllers.TopicController.getAllTopics
+DELETE     /v1/kafka/cluster/:cluster/topics/:topic                       controllers.TopicController.deleteTopic(cluster: String, topic: String)
 
 GET        /v1/kafka/cluster/:cluster/credentials/:user                   controllers.AclController.getCredentials(cluster: String, user: String)
 GET        /v1/kafka/cluster/:cluster/acls                                controllers.AclController.getAclsForTopic(cluster: String, topic: String)

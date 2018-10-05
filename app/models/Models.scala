@@ -14,6 +14,7 @@ object Models {
   case class AclCredentials(username: String, password: String)
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
   case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String])
+  case class Cluster(name: String, description: String)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "name").read[String] and
@@ -38,4 +39,5 @@ object Models {
   implicit val aclFormat: Format[Acl] = Json.format[Acl]
   implicit val basicTopicInfoFormat: Format[BasicTopicInfo] = Json.format[BasicTopicInfo]
   implicit val topicKeyMappingFormat: Format[TopicKeyMapping] = Json.format[TopicKeyMapping]
+  implicit val clusterFormat: Format[Cluster] = Json.format[Cluster]
 }
