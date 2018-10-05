@@ -39,7 +39,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).mkString(","))
       acls.foreach { acl =>
         db.withConnection { implicit conn =>
-          val topicConfigName = acl.topic.toUpperCase().replaceAll("\\.", "_")
+          val topicConfigName = acl.topic.toUpperCase().replaceAll("[\\.-]", "_")
           val schemaMappings = topicDao.getTopicSchemaMappings(cluster, acl.topic)
           val keyType = topicDao.getTopicKeyMapping(cluster, acl.topic) match {
             case Some(k) if k == KeyType.AVRO => s"""${k.keyType.toString}:${k.schema.getOrElse("")}"""

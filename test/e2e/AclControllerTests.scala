@@ -33,7 +33,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   val username2 = "testusername1"
   val password = "testpassword"
   val password2 = "testpassword1"
-  val topic = Topic("test.some.topic", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
+  val topic = Topic("test-some-topic", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
   val topic2 = Topic("test.some.topic.2", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
   val topic3 = Topic("test.some.topic.3", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
   val topic4 = Topic("test.some.topic.4", TopicConfiguration("state", Some("compact"), Some(1), Some(-1), Some(1)))
@@ -324,12 +324,12 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
         ("KAFKA_PASSWORD" -> password),
         ("KAFKA_CONSUMER_TOPICS" -> topic.name),
         ("KAFKA_PRODUCER_TOPICS" -> topic2.name),
-        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_NAME" -> topic.name),
-        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
-        (s"${topic.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_SCHEMAS" -> "testschema"),
-        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_NAME" -> topic2.name),
-        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
-        (s"${topic2.name.toUpperCase.replaceAll("\\.", "_")}_TOPIC_SCHEMAS" -> "")
+        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic.name),
+        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "testschema"),
+        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic2.name),
+        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "")
       )
 
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username").get().futureValue
