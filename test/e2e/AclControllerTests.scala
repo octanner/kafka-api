@@ -159,7 +159,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val expectedJson = Json.obj(
         "aclCredentials" -> Json.obj(
           "username" -> username,
-          "password" -> password
+          "password" -> password,
+          "cluster"  -> cluster
         )
       )
 
@@ -332,20 +333,20 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
         (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "")
       )
 
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username").get().futureValue
+      val result = wsUrl(s"/v1/kafka/credentials/$username").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe Ok
       result.json.as[Map[String, String]] mustBe expectedMap
     }
 
     "return Bad Request when the user is unclaimed" in {
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/$username2").get().futureValue
+      val result = wsUrl(s"/v1/kafka/credentials/$username2").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
     }
 
     "return Bad Request when the user does not exist" in {
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/credentials/nonexistinguser").get().futureValue
+      val result = wsUrl(s"/v1/kafka/credentials/nonexistinguser").get().futureValue
       println(s"${result.status}; Result body: ${result.body}")
       Status(result.status) mustBe BadRequest
     }

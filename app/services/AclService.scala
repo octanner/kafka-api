@@ -24,12 +24,14 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   val logger = Logger(this.getClass)
   val VALID_TOPIC_KEY_VALUE_MAPPINGS = "valid"
 
-  def getConfigMap(cluster: String, user: String): Future[Map[String, String]] = {
-    val configMap = getKafkaHostConfigMap(cluster)
+  def getConfigMap(user: String): Future[Map[String, String]] = {
+
     for {
-      cred <- getCredentials(cluster, user)
+      cred <- getCredentials(user)
+      cluster = cred.cluster
       acls <- getAclsForUsername(cluster, user)
     } yield {
+      val configMap = getKafkaHostConfigMap(cluster)
       configMap += ("KAFKA_USERNAME" -> cred.username)
       configMap += ("KAFKA_PASSWORD" -> cred.password)
 
@@ -55,15 +57,15 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     }
   }
 
-  def getCredentials(cluster: String, user: String) = {
+  def getCredentials(user: String) = {
     Future {
       db.withConnection { implicit conn =>
-        dao.getCredentials(cluster, user) match {
+        dao.getCredentials(user) match {
           case Some(credentials) => credentials
           case None =>
-            logger.error(s"Failed to get credentials for cluster $cluster and user $user. " +
+            logger.error(s"Failed to get credentials for user $user. " +
               s"Either user name does not exist or it is not claimed")
-            throw InvalidUserException(s"Either user $user does not exist in cluster $cluster or the user is not claimed.")
+            throw InvalidUserException(s"Either user $user does not exist or the user is not claimed.")
         }
       }
     }

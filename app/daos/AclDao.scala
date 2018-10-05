@@ -14,13 +14,13 @@ class AclDao {
 
   def getUnclaimedAcl(cluster: String)(implicit conn: Connection): AclCredentials = {
     SQL"""
-          SELECT username, password FROM acl_source WHERE cluster = $cluster AND claimed = false LIMIT 1;
+          SELECT username, password, cluster FROM acl_source WHERE cluster = $cluster AND claimed = false LIMIT 1;
       """.as(aclCredentialsParser.single)
   }
 
-  def getCredentials(cluster: String, user: String)(implicit conn: Connection): Option[AclCredentials] = {
+  def getCredentials(user: String)(implicit conn: Connection): Option[AclCredentials] = {
     SQL"""
-          SELECT username, password FROM acl_source WHERE cluster = $cluster AND username = $user AND claimed = true;
+          SELECT username, password, cluster FROM acl_source WHERE username = $user AND claimed = true;
       """.as(aclCredentialsParser.singleOpt)
   }
 
@@ -88,7 +88,7 @@ class AclDao {
       """.execute()
   }
 
-  implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password")
+  implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password", "cluster")
   implicit val aclRequestParser = Macro.parser[AclRequest]("topic", "username", "role")
   implicit val aclParser = Macro.parser[Acl]("id", "username", "topic", "cluster", "role")
   implicit val stringParser = SqlParser.scalar[String]
