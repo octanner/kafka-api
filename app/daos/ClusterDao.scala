@@ -8,7 +8,7 @@ import models.Models.Cluster
 class ClusterDao {
   def getClusters()(implicit connection: Connection): List[Cluster] = {
     SQL"""
-        SELECT NAME, DESCRIPTION FROM CLUSTER
+        SELECT NAME, DESCRIPTION, NAME as size FROM CLUSTER
       """
       .as(clusterParser.*)
   }

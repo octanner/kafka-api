@@ -14,7 +14,7 @@ object Models {
   case class AclCredentials(username: String, password: String, cluster: String)
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
   case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String])
-  case class Cluster(name: String, description: String)
+  case class Cluster(name: String, description: String, size: String)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "name").read[String] and
