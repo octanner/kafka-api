@@ -6,7 +6,7 @@ import org.scalatest.BeforeAndAfterEach
 import play.api.mvc.Results._
 
 class ClusterControllerTests extends IntTestSpec with BeforeAndAfterEach {
-  val cluster = Cluster("test", "Test Embedded Kafka Cluster")
+  val cluster = Cluster("test", "Test Embedded Kafka Cluster", "test")
   override def beforeAll() = {
     super.beforeAll()
     db.withTransaction { implicit conn =>

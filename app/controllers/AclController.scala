@@ -24,8 +24,8 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     processRequest[AclRequest](createPermissions(cluster))
   }
 
-  def getCredentials(cluster: String, user: String) = Action.async { implicit request =>
-    service.getConfigMap(cluster, user).map { configMap => Ok(Json.toJson(configMap)) }
+  def getCredentials(user: String) = Action.async { implicit request =>
+    service.getConfigMap(user).map { configMap => Ok(Json.toJson(configMap)) }
   }
 
   def getAclsForTopic(cluster: String, topic: String) = Action.async { implicit request =>
