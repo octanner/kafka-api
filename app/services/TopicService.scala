@@ -4,22 +4,21 @@ import java.util.concurrent.ExecutionException
 
 import daos.TopicDao
 import javax.inject.Inject
-import models.Models.{ Topic, TopicConfiguration, TopicKeyMapping }
-import models.http.HttpModels.{ SchemaRequest, TopicKeyMappingRequest, TopicSchemaMapping }
+import models.Models.{BasicTopicInfo, Topic, TopicConfiguration, TopicKeyMapping}
+import models.http.HttpModels.{TopicKeyMappingRequest, TopicSchemaMapping}
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TopicExistsException
 import org.postgresql.util.PSQLException
 import play.api.db.Database
-import play.api.{ Configuration, Logger }
+import play.api.{Configuration, Logger}
 import utils.AdminClientUtil
-import utils.Exceptions.{ NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException, UndefinedResourceException }
+import utils.Exceptions.{NonUniqueTopicNameException, ResourceExistsException, ResourceNotFoundException, UndefinedResourceException}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
 class TopicService @Inject() (
     db:         Database,
@@ -69,15 +68,11 @@ class TopicService @Inject() (
     Future {
       val topic = db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, mapping.topic) }
         .getOrElse(throw ResourceNotFoundException(s"Topic `${mapping.topic}` not found in cluster `$cluster`"))
-      for (schema <- schemaSvc.getSchema(cluster, mapping.schema.name)) yield {
-        val validatedSchemaRequest = SchemaRequest(schema.subject)
-        db.withTransaction { implicit conn =>
-          dao.upsertTopicSchemaMapping(cluster, topic.id, mapping.copy(schema = validatedSchemaRequest))
-        }
-        mapping
+      db.withTransaction { implicit conn =>
+        dao.upsertTopicSchemaMapping(cluster, topic.id, mapping)
       }
-
-    }.flatten
+      mapping
+    }
   }
 
   private def createTopicInDB(cluster: String, topic: Topic, partitions: Int, replicas: Int, retentionMs: Long, cleanupPolicy: String) = {
@@ -171,6 +166,12 @@ class TopicService @Inject() (
       db.withConnection { implicit conn =>
         dao.getTopicSchemaMappings(topic)
       }
+    }
+  }
+
+  def getBasicTopicInfo(cluster: String, topic: String): Future[Option[BasicTopicInfo]] = {
+    Future {
+      db.withConnection { implicit conn => dao.getBasicTopicInfo(cluster, topic) }
     }
   }
 
