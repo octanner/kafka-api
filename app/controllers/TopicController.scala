@@ -85,7 +85,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       else
         throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
     }
-  }.flatMap(f => f)
+  }.flatten
 
   private def validateTopicSchemaMappingRequest(cluster: String, mapping: TopicSchemaMapping): Future[Boolean] = {
     for {
@@ -100,7 +100,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       }
       validateSchema(cluster, mapping.schema.name)
     }
-  }.flatMap(f => f)
+  }.flatten
 
   private def createTopicKeyMapping(cluster: String)(mapping: TopicKeyMappingRequest): Future[Result] = {
     for { isValidRequest <- validateTopicKeyMappingRequest(cluster, mapping) } yield {
@@ -109,7 +109,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       else
         throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
     }
-  }.flatMap(f => f)
+  }.flatten
 
   private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
     for {
@@ -126,7 +126,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
         Future(true)
       }
     }
-  }.flatMap(f => f)
+  }.flatten
 
   private def validateSchema(cluster: String, schema: String): Future[Boolean] = {
     schemaService.getSchema(cluster, schema).transform {
