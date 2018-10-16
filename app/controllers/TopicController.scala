@@ -88,7 +88,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   }.flatMap(f => f)
 
   private def validateTopicSchemaMappingRequest(cluster: String, mapping: TopicSchemaMapping): Future[Boolean] = {
-    val result = for {
+    for {
       topicOpt <- service.getTopic(mapping.topic)
       schemaMappings <- service.getTopicSchemaMappings(cluster, mapping.topic)
     } yield {
@@ -100,8 +100,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       }
       validateSchema(cluster, mapping.schema.name)
     }
-    result.flatMap { x => x }
-  }
+  }.flatMap(f => f)
 
   private def createTopicKeyMapping(cluster: String)(mapping: TopicKeyMappingRequest): Future[Result] = {
     for { isValidRequest <- validateTopicKeyMappingRequest(cluster, mapping) } yield {
@@ -113,7 +112,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   }.flatMap(f => f)
 
   private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
-    val result = for {
+    for {
       topicOpt <- service.getTopic(topicKeyMappingRequest.topic)
     } yield {
       val topic = topicOpt.getOrElse(throw ResourceNotFoundException(s"Topic `${topicKeyMappingRequest.topic}` does not exist"))
@@ -127,8 +126,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
         Future(true)
       }
     }
-    result.flatMap { x => x }
-  }
+  }.flatMap(f => f)
 
   private def validateSchema(cluster: String, schema: String): Future[Boolean] = {
     schemaService.getSchema(cluster, schema).transform {
