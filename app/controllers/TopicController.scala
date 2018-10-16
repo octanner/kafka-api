@@ -7,7 +7,7 @@ import play.api.Logger
 import play.api.libs.json.Json
 import play.api.mvc.{ InjectedController, Result }
 import services.{ SchemaRegistryService, TopicService }
-import utils.Exceptions.InvalidRequestException
+import utils.Exceptions.{ InvalidRequestException, ResourceNotFoundException }
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -79,8 +79,28 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
   }
 
   private def createTopicSchemaMapping(cluster: String)(mapping: TopicSchemaMapping): Future[Result] = {
-    service.createTopicSchemaMapping(cluster, mapping).map { m => Ok(Json.toJson(m)) }
-  }
+    for { isValidRequest <- validateTopicSchemaMappingRequest(cluster, mapping) } yield {
+      if (isValidRequest)
+        service.createTopicSchemaMapping(cluster, mapping).map { m => Ok(Json.toJson(m)) }
+      else
+        throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
+    }
+  }.flatten
+
+  private def validateTopicSchemaMappingRequest(cluster: String, mapping: TopicSchemaMapping): Future[Boolean] = {
+    for {
+      topicOpt <- service.getTopic(mapping.topic)
+      schemaMappings <- service.getTopicSchemaMappings(cluster, mapping.topic)
+    } yield {
+      val topic = topicOpt.getOrElse(throw ResourceNotFoundException(s"Topic `${mapping.topic}` does not exist"))
+      if ((topic.config.name == "ledger" || topic.config.name == "state") && !schemaMappings.isEmpty) {
+        throw InvalidRequestException(s"Cannot map schema `${mapping.schema.name}`. " +
+          s"""Topic `${mapping.topic}` is already mapped to schemas `${topic.schemas.map(_.mkString(","))}`. """ +
+          s"Ledger or State type topic cannot have more than one schema mappings.")
+      }
+      validateSchema(cluster, mapping.schema.name)
+    }
+  }.flatten
 
   private def createTopicKeyMapping(cluster: String)(mapping: TopicKeyMappingRequest): Future[Result] = {
     for { isValidRequest <- validateTopicKeyMappingRequest(cluster, mapping) } yield {
@@ -89,19 +109,31 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       else
         throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
     }
-  }.flatMap(f => f)
+  }.flatten
 
   private def validateTopicKeyMappingRequest(cluster: String, topicKeyMappingRequest: TopicKeyMappingRequest): Future[Boolean] = {
-    if (topicKeyMappingRequest.keyType == KeyType.AVRO) {
-      val schema = topicKeyMappingRequest.schema.getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
-      schemaService.getSchema(cluster, schema.name).transform {
-        case Success(_) => Success(true)
-        case Failure(e) =>
-          logger.error(e.getMessage, e)
-          Success(false)
+    for {
+      topicOpt <- service.getTopic(topicKeyMappingRequest.topic)
+    } yield {
+      val topic = topicOpt.getOrElse(throw ResourceNotFoundException(s"Topic `${topicKeyMappingRequest.topic}` does not exist"))
+      if (topicKeyMappingRequest.keyType == KeyType.AVRO) {
+        val schema = topicKeyMappingRequest.schema
+          .getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
+        validateSchema(cluster, schema.name)
+      } else if (topic.config.name == "compact" && topicKeyMappingRequest.keyType == KeyType.NONE) {
+        throw InvalidRequestException("Compact topic cannot be mapped to `NONE` keytype")
+      } else {
+        Future(true)
       }
-    } else {
-      Future(true)
+    }
+  }.flatten
+
+  private def validateSchema(cluster: String, schema: String): Future[Boolean] = {
+    schemaService.getSchema(cluster, schema).transform {
+      case Success(_) => Success(true)
+      case Failure(e) =>
+        logger.error(e.getMessage, e)
+        Success(false)
     }
   }
 
