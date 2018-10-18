@@ -12,7 +12,7 @@ object Models {
   case class Topic(name: String, config: TopicConfiguration, keyMapping: Option[TopicKeyType] = None, schemas: Option[List[String]] = None, cluster: Option[String] = None)
   case class BasicTopicInfo(id: String, name: String, cluster: String)
   case class AclCredentials(username: String, password: String, cluster: String)
-  case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole)
+  case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole, consumerGroupName: Option[String])
   case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String])
   case class Cluster(name: String, description: String, size: String)
 

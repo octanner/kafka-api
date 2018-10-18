@@ -138,6 +138,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   }
 
   private def entriesWithRoleInDb(role: String): Int = {
+    println(role)
     db.withConnection { implicit conn =>
       SQL"SELECT count(*) FROM acl WHERE role = $role".as(SqlParser.scalar[Int].single)
     }
@@ -212,7 +213,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     "allow user write access for topic" in {
       val role = AclRole.PRODUCER
-      val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequest = AclRequest(topic.name, username, role, Some("*"))
       val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
@@ -228,7 +229,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     "return same id for repeat permission request" in {
       val role = AclRole.PRODUCER
       val roleName = role.role
-      val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequest = AclRequest(topic.name, username, role, None)
       val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
       val aclId = db.withConnection { implicit conn => dao.addPermissionToDb(cluster, aclRequest) }
 
@@ -247,8 +248,9 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     "allow user read access for topic" in {
       val role = AclRole.CONSUMER
-      val aclRequest = AclRequest(topic.name, username, role)
-      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "consumer")
+      val cgName = s"$username-cg1"
+      val aclRequest = AclRequest(topic.name, username, role, Some(cgName))
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "consumer", "consumerGroupName" -> cgName)
 
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
@@ -258,6 +260,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
+      println(s"-------${aclExistsInKafka(username, role.operation)}")
       aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
 
@@ -280,7 +283,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     "fail to grant permissions for unknown username" in {
       val role = AclRole.CONSUMER
       val username = "badUsername"
-      val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequest = AclRequest(topic.name, username, role, None)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
       val result = futureResult.futureValue
 
@@ -293,7 +296,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
     "fail to grant permissions for unknown topic" in {
       val role = AclRole.CONSUMER
       val topicName = "badTopicName"
-      val aclRequest = AclRequest(topicName, username, role)
+      val aclRequest = AclRequest(topicName, username, role, None)
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest))
       val result = futureResult.futureValue
 
@@ -307,11 +310,12 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
   "AclController #getCredentials" must {
     "return Ok with credentials when the user is claimed" in {
+      val cgName = s"$username-cg1"
       val aclId1 = db.withConnection { implicit conn =>
-        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER))
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER, Some(cgName)))
       }
       val aclId2 = db.withConnection { implicit conn =>
-        dao.addPermissionToDb(cluster, AclRequest(topic2.name, username, AclRole.PRODUCER))
+        dao.addPermissionToDb(cluster, AclRequest(topic2.name, username, AclRole.PRODUCER, None))
       }
 
       val expectedMap = Map[String, String](
@@ -325,6 +329,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
         ("KAFKA_PASSWORD" -> password),
         ("KAFKA_CONSUMER_TOPICS" -> topic.name),
         ("KAFKA_PRODUCER_TOPICS" -> topic2.name),
+        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_CONSUMER_GROUP" -> cgName),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic.name),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "testschema"),
@@ -354,17 +359,18 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
   "AclController #getAclsForTopic" must {
     "return list of acls for a topic" in {
+      val cg = s"$username-cg1"
       val aclId1 = db.withConnection { implicit conn =>
-        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER))
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER, Some(cg)))
       }
       val aclId2 = db.withConnection { implicit conn =>
-        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.PRODUCER))
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.PRODUCER, None))
       }
 
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/acls?topic=${topic.name}").get().futureValue
       val expectedJson = Json.obj("acls" -> Json.toJson(List(
-        Acl(aclId1, username, topic.name, cluster, AclRole.CONSUMER),
-        Acl(aclId2, username, topic.name, cluster, AclRole.PRODUCER)
+        Acl(aclId1, username, topic.name, cluster, AclRole.CONSUMER, Some(cg)),
+        Acl(aclId2, username, topic.name, cluster, AclRole.PRODUCER, None)
       )))
 
       println(s"${result.status}; Result body: ${result.body}")
@@ -376,7 +382,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   "AclController #delete" must {
     "return Ok and delete producer acl in kafka and database" in {
       val role = AclRole.PRODUCER
-      val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequest = AclRequest(topic.name, username, role, None)
 
       // Create Acl
       val create = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest)).futureValue
@@ -390,7 +396,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
     "return Ok and delete consumer acl in kafka and database" in {
       val role = AclRole.CONSUMER
-      val aclRequest = AclRequest(topic.name, username, role)
+      val aclRequest = AclRequest(topic.name, username, role, None)
       // Create Acl
       val create = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(Json.toJson(aclRequest)).futureValue
       val aclId = (create.json \ "id").as[String]

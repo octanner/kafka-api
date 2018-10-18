@@ -35,7 +35,8 @@ class AclDao {
     val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username '${aclRequest.user}' not claimed in cluster '$cluster'"))
     val role = aclRequest.role.role
     SQL"""
-          INSERT INTO acl (user_id, topic_id, role, cluster) VALUES ($userId, $topicId, $role, $cluster)
+          INSERT INTO acl (user_id, topic_id, role, cluster, cg_name) VALUES
+          ($userId, $topicId, $role, $cluster, ${aclRequest.consumerGroupName})
           ON CONFLICT ON CONSTRAINT acl_unique DO UPDATE SET topic_id = acl.topic_id;
       """.executeInsert(stringParser.single)
   }
@@ -54,7 +55,7 @@ class AclDao {
 
   def getAclsForTopic(cluster: String, topic: String)(implicit conn: Connection) = {
     SQL"""
-          SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role
+          SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role, cg_name
           FROM acl
           INNER JOIN acl_source ON acl.user_id = acl_source.user_id
           INNER JOIN topic ON acl.topic_id = topic.topic_id
@@ -64,7 +65,7 @@ class AclDao {
 
   def getAclsForUsername(cluster: String, username: String)(implicit conn: Connection) = {
     SQL"""
-          SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role
+          SELECT acl.acl_id as id, acl_source.username, topic, acl.cluster as cluster, acl.role, cg_name
           FROM acl
           INNER JOIN acl_source ON acl.user_id = acl_source.user_id
           INNER JOIN topic ON acl.topic_id = topic.topic_id
@@ -74,7 +75,7 @@ class AclDao {
 
   def getAcl(id: String)(implicit conn: Connection): Option[Acl] = {
     SQL"""
-          SELECT acl.acl_id as id, username, topic, acl.cluster as cluster, role
+          SELECT acl.acl_id as id, username, topic, acl.cluster as cluster, role, cg_name
            FROM acl, topic, acl_source u
            WHERE acl.user_id = u.user_id AND
                  acl.topic_id = topic.topic_id AND
@@ -89,8 +90,7 @@ class AclDao {
   }
 
   implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password", "cluster")
-  implicit val aclRequestParser = Macro.parser[AclRequest]("topic", "username", "role")
-  implicit val aclParser = Macro.parser[Acl]("id", "username", "topic", "cluster", "role")
+  implicit val aclParser = Macro.parser[Acl]("id", "username", "topic", "cluster", "role", "cg_name")
   implicit val stringParser = SqlParser.scalar[String]
 }
 

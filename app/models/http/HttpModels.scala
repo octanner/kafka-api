@@ -14,7 +14,7 @@ object HttpModels {
 
   final case class TopicRequest(topic: Topic) extends HttpRequest
   final case class TopicResponse(topic: Topic) extends HttpResponse
-  final case class AclRequest(topic: String, user: String, role: AclRole) extends HttpRequest
+  final case class AclRequest(topic: String, user: String, role: AclRole, consumerGroupName: Option[String]) extends HttpRequest
   final case class AclResponse(aclCredentials: AclCredentials) extends HttpResponse
   final case class SchemaRequest(name: String) extends HttpRequest
   final case class SchemaResponse(subject: String, version: Int, schema: String) extends HttpRequest

@@ -347,7 +347,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   "Topic Controller #deleteTopic" must {
     "delete database entries and topic in kafka" in {
 
-      val acl = Acl("1", username, topic1.name, cluster, AclRole.PRODUCER)
+      val acl = Acl("1", username, topic1.name, cluster, AclRole.PRODUCER, None)
       db.withTransaction { implicit conn =>
         val topicInfo = dao.getBasicTopicInfo(cluster, topic1.name)
         topicInfo must not be None
