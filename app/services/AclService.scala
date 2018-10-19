@@ -145,7 +145,8 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
           Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
             case Success(id) =>
               createKafkaAcl(cluster, validatedAclRequest)
-              (id -> validatedAclRequest)
+              val acl = dao.getAcl(id)
+              (id -> acl.get)
             case Failure(e) =>
               logger.error(s"Failed to create permission in DB: ${e.getMessage}")
               throw e

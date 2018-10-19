@@ -138,7 +138,6 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   }
 
   private def entriesWithRoleInDb(role: String): Int = {
-    println(role)
     db.withConnection { implicit conn =>
       SQL"SELECT count(*) FROM acl WHERE role = $role".as(SqlParser.scalar[Int].single)
     }
