@@ -217,6 +217,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "Producer")
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
+      println(s"${result.status}: ${result.body}")
       val expectedJson = Json.obj("id" -> getAclId(aclRequest)).toString
 
       Status(result.status) mustBe Ok
@@ -254,7 +255,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
       val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
       val result = futureResult.futureValue
-      val expectedJson = Json.obj("id" -> getAclId(aclRequest)).toString
+      val expectedJson = Json.obj("id" -> getAclId(aclRequest), "consumerGroupName" -> cgName).toString
 
       Status(result.status) mustBe Ok
       entriesWithRoleInDb(role.role) mustBe 1

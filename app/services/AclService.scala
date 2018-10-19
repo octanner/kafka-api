@@ -145,7 +145,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
           Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
             case Success(id) =>
               createKafkaAcl(cluster, validatedAclRequest)
-              id
+              (id -> validatedAclRequest)
             case Failure(e) =>
               logger.error(s"Failed to create permission in DB: ${e.getMessage}")
               throw e
@@ -246,6 +246,9 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   def validateOrAddConsumerGroupName(aclRequest: AclRequest) = {
     if (aclRequest.role == AclRole.CONSUMER && aclRequest.consumerGroupName.isEmpty) {
       aclRequest.copy(consumerGroupName = Some(s"${aclRequest.user}-${UUID.randomUUID.toString}"))
+    } else if (aclRequest.role == AclRole.PRODUCER && aclRequest.consumerGroupName.isDefined) {
+      logger.error(s"Ignoring consumer group name `${aclRequest.consumerGroupName.get}` for producer role")
+      aclRequest.copy(consumerGroupName = None)
     } else {
       aclRequest
     }
