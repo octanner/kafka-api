@@ -38,7 +38,12 @@ class AclController @Inject() (service: AclService) extends InjectedController w
 
   private def createPermissions(cluster: String)(aclRequest: AclRequest): Future[Result] = {
     Try(service.createPermissions(cluster, aclRequest)) match {
-      case Success(id)                          => Future(Ok(Json.obj("id" -> id)))
+      case Success((id, v)) =>
+        val response = if (v.consumerGroupName.isDefined)
+          Json.obj("id" -> id, "consumerGroupName" -> v.consumerGroupName)
+        else
+          Json.obj("id" -> id)
+        Future(Ok(response))
       case Failure(e: IllegalArgumentException) => Future(BadRequest(e.getMessage))
       case Failure(e)                           => throw e
     }

@@ -1,5 +1,6 @@
 package services
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import daos.{ AclDao, TopicDao }
@@ -40,8 +41,11 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       configMap += ("KAFKA_PRODUCER_TOPICS" -> producers.map(_.topic).mkString(","))
       configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).mkString(","))
       acls.foreach { acl =>
+        val topicConfigName = acl.topic.toUpperCase().replaceAll("[\\.-]", "_")
+        if (acl.role == AclRole.CONSUMER && acl.consumerGroupName.isDefined && acl.consumerGroupName != Some("*")) {
+          configMap += (topicConfigName + "_TOPIC_CONSUMER_GROUP" -> acl.consumerGroupName.get)
+        }
         db.withConnection { implicit conn =>
-          val topicConfigName = acl.topic.toUpperCase().replaceAll("[\\.-]", "_")
           val schemaMappings = topicDao.getTopicSchemaMappings(cluster, acl.topic)
           val keyType = topicDao.getTopicKeyMapping(cluster, acl.topic) match {
             case Some(k) if k == KeyType.AVRO => s"""${k.keyType.toString}:${k.schema.getOrElse("")}"""
@@ -74,7 +78,9 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   def getAclsForUsername(cluster: String, user: String) = {
     Future {
       db.withConnection { implicit conn =>
-        dao.getAclsForUsername(cluster, user)
+        dao.getAclsForUsername(cluster, user).map { acl =>
+          if (acl.role == AclRole.CONSUMER) acl else acl.copy(consumerGroupName = None)
+        }
       }
     }
   }
@@ -105,7 +111,9 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   def getAclsByTopic(cluster: String, topic: String) = {
     Future {
       db.withConnection { implicit conn =>
-        dao.getAclsForTopic(cluster, topic)
+        dao.getAclsForTopic(cluster, topic).map { acl =>
+          if (acl.role == AclRole.CONSUMER) acl else acl.copy(consumerGroupName = None)
+        }
       }
     }
   }
@@ -131,12 +139,14 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       val topicKeyMapping = topicDao.getTopicKeyMapping(cluster, aclRequest.topic)
       val topicSchemaMappings = topicDao.getTopicSchemaMappings(cluster, aclRequest.topic)
       val validationMessage = validateTopicKeyAndValueSchemaMappings(topicKeyMapping, topicSchemaMappings)
+      val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
       validationMessage match {
         case VALID_TOPIC_KEY_VALUE_MAPPINGS =>
-          Try(dao.addPermissionToDb(cluster, aclRequest)) match {
+          Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
             case Success(id) =>
-              createKafkaAcl(cluster, aclRequest)
-              id
+              createKafkaAcl(cluster, validatedAclRequest)
+              val acl = dao.getAcl(id)
+              (id -> acl.get)
             case Failure(e) =>
               logger.error(s"Failed to create permission in DB: ${e.getMessage}")
               throw e
@@ -150,20 +160,26 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
   def createKafkaAcl(cluster: String, aclRequest: AclRequest) = {
     val topicAclBinding = createAclBinding(aclRequest, ResourceType.TOPIC, aclRequest.topic, host = "*")
-    val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = "*", host = "*")
+    val groupName = if (aclRequest.role == AclRole.CONSUMER)
+      aclRequest.consumerGroupName.get
+    else
+      "*"
+    val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = groupName, host = "*")
 
     val adminClient = util.getAdminClient(cluster)
     val aclCreationResponse = adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
     adminClient.close()
     Try(aclCreationResponse.get) match {
       case Success(_) =>
-        logger.info(s"Successfully added permission for '${aclRequest.user}' with role '${aclRequest.role}' " +
-          s"on topic '${aclRequest.topic}' in cluster '$cluster' to Kafka")
+        logger.info(s"Successfully added permission for '${aclRequest.user}' with role '${aclRequest.role}'" +
+          s"${if (aclRequest.role == AclRole.CONSUMER) " to consumer group " + aclRequest.consumerGroupName.get else ""}" +
+          s" on topic '${aclRequest.topic}' in cluster '$cluster' to Kafka")
       case Failure(e: InvalidRequestException) =>
         logger.error(e.getMessage, e)
         throw e
       case Failure(e) =>
-        logger.error(s"Unable to add permission for '${aclRequest.user}' with role '${aclRequest.role}' " +
+        logger.error(s"Unable to add permission for '${aclRequest.user}' with role '${aclRequest.role}'" +
+          s"${if (aclRequest.role == AclRole.CONSUMER) " to consumer group " + aclRequest.consumerGroupName.get else ""}" +
           s"on topic '${aclRequest.topic}' in cluster '$cluster' to Kafka", e)
         throw e
     }
@@ -181,7 +197,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
   def deleteKafkaAcl(acl: Acl) = {
     val topicAclBinding = createAclBindingFilter(acl, ResourceType.TOPIC, acl.topic, host = "*")
-    val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = "*", host = "*")
+    val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = acl.consumerGroupName.getOrElse("*"), host = "*")
 
     val adminClient = util.getAdminClient(acl.cluster)
     val aclDeletionResponse = adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
@@ -225,6 +241,17 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       "Topic Key Mapping need to be defined"
     } else {
       VALID_TOPIC_KEY_VALUE_MAPPINGS
+    }
+  }
+
+  def validateOrAddConsumerGroupName(aclRequest: AclRequest) = {
+    if (aclRequest.role == AclRole.CONSUMER && aclRequest.consumerGroupName.isEmpty) {
+      aclRequest.copy(consumerGroupName = Some(s"${aclRequest.user}-${UUID.randomUUID.toString}"))
+    } else if (aclRequest.role == AclRole.PRODUCER && aclRequest.consumerGroupName.isDefined) {
+      logger.error(s"Ignoring consumer group name `${aclRequest.consumerGroupName.get}` for producer role")
+      aclRequest.copy(consumerGroupName = None)
+    } else {
+      aclRequest
     }
   }
 }
