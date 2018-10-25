@@ -192,9 +192,9 @@ class TopicService @Inject() (
           case Failure(e: PSQLException) if (e.getSQLState == PSQL_UNIQUE_VIOLATION_CODE) =>
             throw ResourceExistsException(s"Topic Key Mapping already exists for topic `${topic.name}` and cannot be changed")
           case Failure(e) => throw e
-
         }
       }
+      topicKeyMappingRequest
     }
   }
 
