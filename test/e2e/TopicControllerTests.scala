@@ -199,6 +199,18 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   }
 
   "Topic Controller #createSchemaMapping" must {
+    "return BadRequest when schema is not found" in {
+      val schema = SchemaRequest("testSchema")
+      val mapping = TopicSchemaMapping(topic1.name, schema)
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/latest"
+      setMockRequestResponseExpectations(url, 404, Json.obj("error" -> "Not Found"))
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-schema-mapping")
+        .post(Json.toJson(mapping)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe BadRequest
+    }
+
     "return Ok and create a mapping for topic and schema" in {
       val conf = app.injector.instanceOf[Configuration]
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/latest"
@@ -210,12 +222,24 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
       result.json.as[TopicSchemaMapping] mustBe mapping
     }
 
+    "return OK when mapping duplicate schema mapping and no duplicate entry in DB" in {
+      val conf = app.injector.instanceOf[Configuration]
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/latest"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, 2, "")))
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-schema-mapping")
+        .post(Json.toJson(mapping)).futureValue
+      println(s"${result.status}: ${result.body}")
+      Status(result.status) mustBe Ok
+      result.json.as[TopicSchemaMapping] mustBe mapping
+      db.withConnection { implicit conn => dao.getTopicSchemaMappings(cluster, mapping.topic) }.size mustBe 1
+    }
+
     "return Badrequest when mapping a second schema to ledger or state topic" in {
       val conf = app.injector.instanceOf[Configuration]
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/schema2/versions/latest"
       setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse("schema2", 1, "")))
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-schema-mapping")
-        .post(Json.toJson(mapping)).futureValue
+        .post(Json.toJson(mapping.copy(schema = SchemaRequest("schema2")))).futureValue
       println(s"${result.status}: ${result.body}")
       Status(result.status) mustBe BadRequest
     }
@@ -229,16 +253,28 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
       Status(result.status) mustBe NotFound
     }
 
-    "return BadRequest when schema is not found" in {
-      val schema = SchemaRequest("testSchema")
-      val mapping = TopicSchemaMapping(topic1.name, schema)
+    "return ok when mapping second schema to event topic" in {
+      createTopic(topic3)
+      val schema1 = SchemaRequest("testSchema")
+      val schema2 = SchemaRequest("testSchema2")
+      val mapping1 = TopicSchemaMapping(topic3.name, schema1)
+      val mapping2 = TopicSchemaMapping(topic3.name, schema2)
       val conf = app.injector.instanceOf[Configuration]
-      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/latest"
-      setMockRequestResponseExpectations(url, 404, Json.obj("error" -> "Not Found"))
+
+      val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping1.schema.name}/versions/latest"
+      setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema1.name, 2, "")))
       val result = wsUrl(s"/v1/kafka/cluster/$cluster/topic-schema-mapping")
-        .post(Json.toJson(mapping)).futureValue
-      println(s"${result.status}: ${result.body}")
-      Status(result.status) mustBe BadRequest
+        .post(Json.toJson(mapping1)).futureValue
+      Status(result.status) mustBe Ok
+
+      val url2 = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping2.schema.name}/versions/latest"
+      setMockRequestResponseExpectations(url2, 200, Json.toJson(SchemaResponse(schema2.name, 2, "")))
+      val result2 = wsUrl(s"/v1/kafka/cluster/$cluster/topic-schema-mapping")
+        .post(Json.toJson(mapping2)).futureValue
+      Status(result2.status) mustBe Ok
+
+      val mappings = db.withConnection { implicit conn => dao.getTopicSchemaMappings(cluster, topic3.name) }
+      mappings.size mustBe 2
     }
   }
 
@@ -292,7 +328,6 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
     }
 
     "return Ok for key type avro mapping" in {
-      createTopic(topic3)
       val conf = app.injector.instanceOf[Configuration]
       val url = s"${conf.get[String](cluster.toLowerCase + ".kafka.avro.registry.location")}/subjects/${mapping.schema.name}/versions/latest"
       setMockRequestResponseExpectations(url, 200, Json.toJson(SchemaResponse(schema.name, 2, "")))
