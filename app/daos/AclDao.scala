@@ -2,6 +2,7 @@ package daos
 
 import java.sql.Connection
 
+import anorm.SqlParser.{ get, str }
 import anorm._
 import models.AclRole
 import models.AclRole.AclRole
@@ -34,9 +35,10 @@ class AclDao {
     val topicId = getTopicIdByName(cluster, aclRequest.topic).getOrElse(throw new IllegalArgumentException(s"Topic '${aclRequest.topic}' not found in cluster '$cluster'"))
     val userId = getUserIdByName(cluster, aclRequest.user).getOrElse(throw new IllegalArgumentException(s"Username '${aclRequest.user}' not claimed in cluster '$cluster'"))
     val role = aclRequest.role.role
+    val cg_name = aclRequest.consumerGroupName.getOrElse("*")
     SQL"""
           INSERT INTO acl (user_id, topic_id, role, cluster, cg_name) VALUES
-          ($userId, $topicId, $role, $cluster, ${aclRequest.consumerGroupName})
+          ($userId, $topicId, $role, $cluster, ${cg_name})
           ON CONFLICT ON CONSTRAINT acl_unique DO UPDATE SET topic_id = acl.topic_id;
       """.executeInsert(stringParser.single)
   }
@@ -90,12 +92,20 @@ class AclDao {
   }
 
   implicit val aclCredentialsParser = Macro.parser[AclCredentials]("username", "password", "cluster")
-  implicit val aclParser = Macro.parser[Acl]("id", "username", "topic", "cluster", "role", "cg_name")
+  implicit val aclParser: RowParser[Acl] =
+    (str("id") ~ str("username") ~ str("topic") ~ str("cluster") ~ aclRole("role") ~ str("cg_name")) map {
+      case id ~ username ~ topic ~ cluster ~ role ~ cgName =>
+        cgName match {
+          case "*" => Acl(id, username, topic, cluster, role, None)
+          case cg  => Acl(id, username, topic, cluster, role, Some(cg))
+        }
+    }
   implicit val stringParser = SqlParser.scalar[String]
 }
 
 object AclDao {
-  implicit val aclRoleParser: Column[AclRole] = Column.nonNull { (value, _) =>
+  def aclRole(columnName: String)(implicit c: Column[AclRole]): RowParser[AclRole] = get[AclRole](columnName)(c)
+  implicit val aclRoleColumnParser: Column[AclRole] = Column.nonNull { (value, _) =>
     value match {
       case role: String => Right(AclRole.get(role).getOrElse(throw InvalidAclRoleException(s"role `$role` for ACL is not valid")))
     }

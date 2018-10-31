@@ -1,22 +1,21 @@
 package services
 
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 import daos.{ AclDao, TopicDao }
 import javax.inject.Inject
-import models.{ AclRole, KeyType }
 import models.Models.{ Acl, TopicKeyMapping }
 import models.http.HttpModels.{ AclRequest, TopicSchemaMapping }
+import models.{ AclRole, KeyType }
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{ PatternType, ResourcePattern, ResourcePatternFilter, ResourceType }
-import play.api.{ Configuration, Logger }
 import play.api.db.Database
+import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
 import utils.Exceptions.{ InvalidRequestException, InvalidUserException, ResourceNotFoundException }
 
-import scala.collection.mutable.Map
 import scala.collection.JavaConverters._
+import scala.collection.mutable.Map
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
@@ -39,12 +38,10 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       val producers = acls.filter(_.role == AclRole.PRODUCER)
       val consumers = acls.filter(_.role == AclRole.CONSUMER)
       configMap += ("KAFKA_PRODUCER_TOPICS" -> producers.map(_.topic).mkString(","))
-      configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).mkString(","))
+      configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).distinct.mkString(","))
       acls.foreach { acl =>
         val topicConfigName = acl.topic.toUpperCase().replaceAll("[\\.-]", "_")
-        if (acl.role == AclRole.CONSUMER && acl.consumerGroupName.isDefined && acl.consumerGroupName != Some("*")) {
-          configMap += (topicConfigName + "_TOPIC_CONSUMER_GROUP" -> acl.consumerGroupName.get)
-        }
+        getConsumerGroupConfigMap(acl, topicConfigName, configMap)
         db.withConnection { implicit conn =>
           val schemaMappings = topicDao.getTopicSchemaMappings(cluster, acl.topic)
           val keyType = topicDao.getTopicKeyMapping(cluster, acl.topic) match {
@@ -58,6 +55,16 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
         }
       }
       configMap
+    }
+  }
+
+  private def getConsumerGroupConfigMap(acl: Acl, topicConfigName: String, configMap: collection.mutable.Map[String, String]) = {
+    if (acl.role == AclRole.CONSUMER && acl.consumerGroupName.isDefined && acl.consumerGroupName.isDefined) {
+      val key = topicConfigName + "_TOPIC_CONSUMER_GROUPS"
+      if (configMap.contains(key))
+        configMap += (key -> Seq(configMap(key), acl.consumerGroupName.get).mkString(","))
+      else
+        configMap += (key -> acl.consumerGroupName.get)
     }
   }
 
@@ -78,9 +85,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   def getAclsForUsername(cluster: String, user: String) = {
     Future {
       db.withConnection { implicit conn =>
-        dao.getAclsForUsername(cluster, user).map { acl =>
-          if (acl.role == AclRole.CONSUMER) acl else acl.copy(consumerGroupName = None)
-        }
+        dao.getAclsForUsername(cluster, user)
       }
     }
   }
@@ -136,25 +141,16 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
   def createPermissions(cluster: String, aclRequest: AclRequest) = {
     db.withTransaction { implicit conn =>
-      val topicKeyMapping = topicDao.getTopicKeyMapping(cluster, aclRequest.topic)
-      val topicSchemaMappings = topicDao.getTopicSchemaMappings(cluster, aclRequest.topic)
-      val validationMessage = validateTopicKeyAndValueSchemaMappings(topicKeyMapping, topicSchemaMappings)
       val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
-      validationMessage match {
-        case VALID_TOPIC_KEY_VALUE_MAPPINGS =>
-          Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
-            case Success(id) =>
-              createKafkaAcl(cluster, validatedAclRequest)
-              val acl = dao.getAcl(id)
-              (id -> acl.get)
-            case Failure(e) =>
-              logger.error(s"Failed to create permission in DB: ${e.getMessage}")
-              throw e
-          }
-        case invalidMessage: String =>
-          throw InvalidRequestException(s"$invalidMessage for topic `${aclRequest.topic}`, before creating acl")
+      Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
+        case Success(id) =>
+          createKafkaAcl(cluster, validatedAclRequest)
+          val acl = dao.getAcl(id)
+          (id -> acl.get)
+        case Failure(e) =>
+          logger.error(s"Failed to create permission in DB: ${e.getMessage}")
+          throw e
       }
-
     }
   }
 
@@ -228,20 +224,6 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     val resourcePattern = new ResourcePatternFilter(resourceType, resourceName, PatternType.LITERAL)
     val accessControlEntry = new AccessControlEntryFilter(s"User:$username", host, role, AclPermissionType.ALLOW)
     new AclBindingFilter(resourcePattern, accessControlEntry)
-  }
-
-  private def validateTopicKeyAndValueSchemaMappings(
-    topicKeyMapping:     Option[TopicKeyMapping],
-    topicSchemaMappings: List[TopicSchemaMapping]): String = {
-    if (topicKeyMapping.isEmpty && topicSchemaMappings.isEmpty) {
-      "Topic Key Mapping and atleast one Topic Value Schema Mapping needs to be defined"
-    } else if (topicKeyMapping.isDefined && topicSchemaMappings.isEmpty) {
-      "Atleast one Topic Value Schema Mapping need to be defined"
-    } else if (topicKeyMapping.isEmpty && !topicSchemaMappings.isEmpty) {
-      "Topic Key Mapping need to be defined"
-    } else {
-      VALID_TOPIC_KEY_VALUE_MAPPINGS
-    }
   }
 
   def validateOrAddConsumerGroupName(aclRequest: AclRequest) = {
