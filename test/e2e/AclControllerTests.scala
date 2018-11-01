@@ -5,7 +5,7 @@ import java.util.{Properties, UUID}
 import anorm._
 import daos.{AclDao, TopicDao}
 import models.AclRole
-import models.Models.{Acl, AclCredentials, Topic, TopicConfiguration}
+import models.Models.{Acl, Topic, TopicConfiguration}
 import models.http.HttpModels.AclRequest
 import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
@@ -148,7 +148,8 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val userId = dao.getUserIdByName(cluster, aclRequest.user)
       val topicId = dao.getTopicIdByName(cluster, aclRequest.topic)
       val role = aclRequest.role.role
-      SQL"SELECT acl_id FROM acl WHERE cluster = $cluster AND topic_id = $topicId AND role = $role AND user_id = $userId".as(dao.stringParser.single)
+      val cgname = aclRequest.consumerGroupName.getOrElse("*")
+      SQL"SELECT acl_id FROM acl WHERE cluster = $cluster AND topic_id = $topicId AND role = $role AND user_id = $userId AND cg_name = $cgname".as(dao.stringParser.single)
     }
   }
 
@@ -168,47 +169,6 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       result.json mustBe expectedJson
     }
 
-    "return Bad Request when topic key and schema mapping both are not defined" in {
-      val role = AclRole.PRODUCER
-      val aclRequestJson = Json.obj("topic" -> topic4.name, "user" -> username, "role" -> "Producer")
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
-      val result = futureResult.futureValue
-
-      println(s"result status: ${result.status}; body: ${result.body}")
-      Status(result.status) mustBe BadRequest
-      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Topic Key Mapping and atleast one Topic Value Schema Mapping needs to be defined for topic `${topic4.name}`, before creating acl"
-      entriesWithRoleInDb(role.role) mustBe 0
-      // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 0
-    }
-
-    "return Bad Request when topic key mapping is not defined" in {
-      val role = AclRole.PRODUCER
-      val aclRequestJson = Json.obj("topic" -> topic3.name, "user" -> username, "role" -> "Producer")
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
-      val result = futureResult.futureValue
-
-      println(s"result status: ${result.status}; body: ${result.body}")
-      Status(result.status) mustBe BadRequest
-      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Topic Key Mapping need to be defined for topic `${topic3.name}`, before creating acl"
-      entriesWithRoleInDb(role.role) mustBe 0
-      // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 0
-    }
-
-    "return Bad Request when topic schema mapping both are not defined" in {
-      val role = AclRole.PRODUCER
-      val aclRequestJson = Json.obj("topic" -> topic2.name, "user" -> username, "role" -> "Producer")
-      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
-      val result = futureResult.futureValue
-
-      println(s"result status: ${result.status}; body: ${result.body}")
-      Status(result.status) mustBe BadRequest
-      ((result.json \ "errors" \\ "detail")(0)).as[String] mustBe s"Atleast one Topic Value Schema Mapping need to be defined for topic `${topic2.name}`, before creating acl"
-      entriesWithRoleInDb(role.role) mustBe 0
-      // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 0
-    }
 
     "allow user write access for topic" in {
       val role = AclRole.PRODUCER
@@ -264,6 +224,41 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       aclExistsInKafka(username, role.operation).size() mustEqual 2
     }
 
+    "same ID and consumer group name for repeat request with same cg name " in {
+      val role = AclRole.CONSUMER
+      val cgName = s"$username-cg1"
+      val aclRequest = AclRequest(topic.name, username, role, Some(cgName))
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "consumer", "consumerGroupName" -> cgName)
+
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
+      val result = futureResult.futureValue
+      val expectedJson = Json.obj("id" -> getAclId(aclRequest), "consumerGroupName" -> cgName).toString
+
+      Status(result.status) mustBe Ok
+      entriesWithRoleInDb(role.role) mustBe 1
+      result.body mustBe expectedJson
+      // Acl should be created for topic and group
+      println(s"-------${aclExistsInKafka(username, role.operation)}")
+      aclExistsInKafka(username, role.operation).size() mustEqual 2
+    }
+
+    "allow user second read access for topic with different cg name" in {
+      val role = AclRole.CONSUMER
+      val cgName = s"$username-cg2"
+      val aclRequest = AclRequest(topic.name, username, role, Some(cgName))
+      val aclRequestJson = Json.obj("topic" -> topic.name, "user" -> username, "role" -> "consumer", "consumerGroupName" -> cgName)
+
+      val futureResult = wsUrl(s"/v1/kafka/cluster/$cluster/acls").post(aclRequestJson)
+      val result = futureResult.futureValue
+      val expectedJson = Json.obj("id" -> getAclId(aclRequest), "consumerGroupName" -> cgName).toString
+
+      Status(result.status) mustBe Ok
+      entriesWithRoleInDb(role.role) mustBe 1
+      result.body mustBe expectedJson
+      // Acl should be created for topic and group
+      aclExistsInKafka(username, role.operation).size() mustEqual 2
+    }
+
     "fail to grant permissions for unknown role" in {
       val role = "UNKNOWN"
       val aclRequest = Json.obj(
@@ -311,11 +306,15 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   "AclController #getCredentials" must {
     "return Ok with credentials when the user is claimed" in {
       val cgName = s"$username-cg1"
+      val cgName2 = s"$username-cg2"
       val aclId1 = db.withConnection { implicit conn =>
         dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER, Some(cgName)))
       }
       val aclId2 = db.withConnection { implicit conn =>
         dao.addPermissionToDb(cluster, AclRequest(topic2.name, username, AclRole.PRODUCER, None))
+      }
+      val aclId3 = db.withConnection { implicit conn =>
+        dao.addPermissionToDb(cluster, AclRequest(topic.name, username, AclRole.CONSUMER, Some(cgName2)))
       }
 
       val expectedMap = Map[String, String](
@@ -329,7 +328,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
         ("KAFKA_PASSWORD" -> password),
         ("KAFKA_CONSUMER_TOPICS" -> topic.name),
         ("KAFKA_PRODUCER_TOPICS" -> topic2.name),
-        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_CONSUMER_GROUP" -> cgName),
+        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_CONSUMER_GROUPS" -> s"$cgName,$cgName2"),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic.name),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
         (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "testschema"),
