@@ -140,8 +140,10 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
   }
 
   def createPermissions(cluster: String, aclRequest: AclRequest) = {
+    logger.info(s"acl create request $aclRequest")
     db.withTransaction { implicit conn =>
       val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
+      logger.info(s"validated acl create request $validatedAclRequest")
       Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
         case Success(id) =>
           createKafkaAcl(cluster, validatedAclRequest)
