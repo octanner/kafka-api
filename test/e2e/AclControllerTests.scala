@@ -18,6 +18,7 @@ import play.api.inject.bind
 import play.api.inject.guice.GuiceableModule
 import play.api.libs.json.Json
 import play.api.mvc.Results._
+import services.AclService
 import utils.AdminClientUtil
 import utils.AdminClientUtil.ADMIN_CLIENT_ID
 
@@ -328,13 +329,13 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
         ("KAFKA_PASSWORD" -> password),
         ("KAFKA_CONSUMER_TOPICS" -> topic.name),
         ("KAFKA_PRODUCER_TOPICS" -> topic2.name),
-        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_CONSUMER_GROUPS" -> s"$cgName,$cgName2"),
-        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic.name),
-        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
-        (s"${topic.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "testschema"),
-        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_NAME" -> topic2.name),
-        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_KEY_TYPE" -> "NONE"),
-        (s"${topic2.name.toUpperCase.replaceAll("[\\.-]", "_")}_TOPIC_SCHEMAS" -> "")
+        (s"${AclService.getTopicConfigPrefix(topic.name)}_TOPIC_CONSUMER_GROUPS" -> s"$cgName,$cgName2"),
+        (s"${AclService.getTopicConfigPrefix(topic.name)}_TOPIC_NAME" -> topic.name),
+        (s"${AclService.getTopicConfigPrefix(topic.name)}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${AclService.getTopicConfigPrefix(topic.name)}_TOPIC_SCHEMAS" -> "testschema"),
+        (s"${AclService.getTopicConfigPrefix(topic2.name)}_TOPIC_NAME" -> topic2.name),
+        (s"${AclService.getTopicConfigPrefix(topic2.name)}_TOPIC_KEY_TYPE" -> "NONE"),
+        (s"${AclService.getTopicConfigPrefix(topic2.name)}_TOPIC_SCHEMAS" -> "")
       )
 
       val result = wsUrl(s"/v1/kafka/credentials/$username").get().futureValue

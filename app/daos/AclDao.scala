@@ -85,6 +85,19 @@ class AclDao {
       """.as(aclParser.singleOpt)
   }
 
+  def getAclsByUsernameTopicClusterAndRole(acl: Acl)(implicit conn: Connection): List[Acl] = {
+    SQL"""
+          SELECT acl.acl_id as id, username, topic, acl.cluster as cluster, role, cg_name
+           FROM acl, topic, acl_source u
+           WHERE acl.user_id = u.user_id AND
+                 acl.topic_id = topic.topic_id AND
+                 topic.topic = ${acl.topic} AND
+                 u.username = ${acl.user} AND
+                 role = ${acl.role.role} AND
+                 acl.cluster = ${acl.cluster}
+      """.as(aclParser.*)
+  }
+
   def deleteAcl(id: String)(implicit conn: Connection) = {
     SQL"""
         DELETE FROM ACL WHERE acl_id = ${id}

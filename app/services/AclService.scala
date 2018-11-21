@@ -21,6 +21,7 @@ import scala.concurrent.Future
 import scala.util.{ Failure, Success, Try }
 
 class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util: AdminClientUtil, conf: Configuration) {
+  import AclService._
   val logger = Logger(this.getClass)
   val VALID_TOPIC_KEY_VALUE_MAPPINGS = "valid"
 
@@ -40,7 +41,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       configMap += ("KAFKA_PRODUCER_TOPICS" -> producers.map(_.topic).mkString(","))
       configMap += ("KAFKA_CONSUMER_TOPICS" -> consumers.map(_.topic).distinct.mkString(","))
       acls.foreach { acl =>
-        val topicConfigName = acl.topic.toUpperCase().replaceAll("[\\.-]", "_")
+        val topicConfigName = getTopicConfigPrefix(acl.topic)
         getConsumerGroupConfigMap(acl, topicConfigName, configMap)
         db.withConnection { implicit conn =>
           val schemaMappings = topicDao.getTopicSchemaMappings(cluster, acl.topic)
@@ -187,18 +188,24 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     Future {
       db.withTransaction { implicit conn =>
         val acl = dao.getAcl(id).getOrElse(throw ResourceNotFoundException(s"Acl not found for id $id"))
+        val otherAclsForUserTopicAndRole = dao.getAclsByUsernameTopicClusterAndRole(acl).filter { a => a.id != id }
         dao.deleteAcl(id)
-        deleteKafkaAcl(acl)
+        deleteKafkaAcl(acl, otherAclsForUserTopicAndRole)
       }
     }
   }
 
-  def deleteKafkaAcl(acl: Acl) = {
-    val topicAclBinding = createAclBindingFilter(acl, ResourceType.TOPIC, acl.topic, host = "*")
+  def deleteKafkaAcl(acl: Acl, otherAclsForUserTopicAndRole: List[Acl]) = {
     val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = acl.consumerGroupName.getOrElse("*"), host = "*")
+    val aclBindingsToRemove = if (otherAclsForUserTopicAndRole.isEmpty) {
+      val topicAclBinding = createAclBindingFilter(acl, ResourceType.TOPIC, acl.topic, host = "*")
+      List(topicAclBinding, groupAclBinding)
+    } else {
+      List(groupAclBinding)
+    }
 
     val adminClient = util.getAdminClient(acl.cluster)
-    val aclDeletionResponse = adminClient.deleteAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+    val aclDeletionResponse = adminClient.deleteAcls(aclBindingsToRemove.asJava).all()
     adminClient.close()
     Try(aclDeletionResponse.get) match {
       case Success(bindings) =>
@@ -237,5 +244,17 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     } else {
       aclRequest
     }
+  }
+}
+
+object AclService {
+  val ENVS = List("TEST", "DEV", "QA", "STG", "PROD", "PRD")
+  def getTopicConfigPrefix(topic: String): String = {
+    val topicConfigPrefix = topic.toUpperCase().replaceAll("[\\.-]", "_")
+    val topicPrefixParts = topicConfigPrefix.split("_")
+    if (ENVS.contains(topicPrefixParts.head))
+      topicPrefixParts.drop(1).mkString("_")
+    else
+      topicPrefixParts.mkString("_")
   }
 }
