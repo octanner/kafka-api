@@ -116,7 +116,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
       if (isValidRequest == VALID)
         service.createTopicKeyMapping(cluster, mapping).map(m => Ok(Json.toJson(m)))
       else
-        throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema}` in cluster `$cluster`")
+        throw InvalidRequestException(s"Failed to validate the schema `${mapping.schema.map(_.name)}` in cluster `$cluster`")
     }
   }.flatten
 
@@ -129,7 +129,7 @@ class TopicController @Inject() (service: TopicService, schemaService: SchemaReg
         val schema = topicKeyMappingRequest.schema
           .getOrElse(throw InvalidRequestException("schema needs to be defined for key type `AVRO`"))
         validateSchema(cluster, schema.name)
-      } else if (topic.config.name == "compact" && topicKeyMappingRequest.keyType == KeyType.NONE) {
+      } else if (topic.config.name == "state" && topicKeyMappingRequest.keyType == KeyType.NONE) {
         throw InvalidRequestException("Compact topic cannot be mapped to `NONE` keytype")
       } else {
         Future(VALID)
