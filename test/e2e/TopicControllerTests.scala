@@ -42,7 +42,7 @@ class TopicControllerTests extends IntTestSpec with BeforeAndAfterEach with Mock
   val topic1 = Topic("test.some.topic.1", TopicConfiguration("ledger", None, None, None, None))
   val topic2 = Topic("test.some.topic.2", TopicConfiguration("state", Some("compact"), Some(1), Some(888888), Some(1)))
   val topic3 = Topic("test.some.topic.3", TopicConfiguration("event", Some("delete"), Some(1), Some(888888), Some(1)))
-  val topic4 = Topic("test.some.topic.4", TopicConfiguration("compact", Some("delete"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType), Some(List(schema.name)), Some(cluster))
+  val topic4 = Topic("test.some.topic.4", TopicConfiguration("state", Some("compact"), Some(1), Some(888888), Some(1)), Some(avroTopicKeyType), Some(List(schema.name)), Some(cluster))
   val topic4_id = UUID.randomUUID.toString
   val username = "testuser"
   val password = "testpass"
