@@ -424,7 +424,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
   "AclController #deleteUser" must {
     "Delete all ACls for user and unclaim the user" in {
       println(s"Count of ACLs for user ${username} before delete ${db.withConnection { implicit conn => dao.getAclsForUsername(cluster, username)}}")
-      val result = wsUrl(s"/v1/kafka/cluster/$cluster/user/$username").delete().futureValue
+      val result = wsUrl(s"/v1/kafka/user/$username").delete().futureValue
       Status(result.status) mustBe Ok
       println(s"Count of ACLs for user ${username} before delete ${db.withConnection { implicit conn => dao.getAclsForUsername(cluster, username)}}")
       getUserClaimedStatus(cluster, username) mustBe false

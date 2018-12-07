@@ -246,7 +246,10 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     }
   }
 
-  def unclaimUser(cluster: String, user: String) = {
+  def unclaimUser(user: String) = {
+    val cluster = db.withConnection { implicit conn => dao.getCredentials(user) }.getOrElse(
+      throw new ResourceNotFoundException(s"User ${user} does not exist or is already unclaimed")
+    ).cluster
     val acls = db.withConnection { implicit conn => dao.getAclsForUsername(cluster, user) }
     Future.sequence(acls.map { acl => deleteAcl(acl.id) }).map { _ =>
       db.withTransaction { implicit conn => dao.unclaimUser(cluster, user) }
