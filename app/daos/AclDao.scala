@@ -25,9 +25,15 @@ class AclDao {
       """.as(aclCredentialsParser.singleOpt)
   }
 
-  def claimAcl(cluster: String, username: String)(implicit conn: Connection) = {
+  def claimUser(cluster: String, username: String)(implicit conn: Connection) = {
     SQL"""
           UPDATE acl_source SET claimed = TRUE, claimed_timestamp = now() WHERE cluster = $cluster AND username = $username;
+      """.executeUpdate()
+  }
+
+  def unclaimUser(cluster: String, username: String)(implicit conn: Connection) = {
+    SQL"""
+          UPDATE acl_source SET claimed = false, claimed_timestamp = now() WHERE cluster = $cluster AND username = $username;
       """.executeUpdate()
   }
 

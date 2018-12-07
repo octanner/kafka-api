@@ -128,7 +128,7 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     Future {
       db.withTransaction { implicit conn =>
         val aclCredentials = dao.getUnclaimedAcl(cluster)
-        Try(dao.claimAcl(cluster, aclCredentials.username)) match {
+        Try(dao.claimUser(cluster, aclCredentials.username)) match {
           case Success(_) =>
             logger.info(s"Claimed user '${aclCredentials.username}' in cluster '$cluster'")
             aclCredentials
@@ -243,6 +243,13 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
       aclRequest.copy(consumerGroupName = None)
     } else {
       aclRequest
+    }
+  }
+
+  def unclaimUser(cluster: String, user: String) = {
+    val acls = db.withConnection { implicit conn => dao.getAclsForUsername(cluster, user) }
+    Future.sequence(acls.map { acl => deleteAcl(acl.id) }).map { _ =>
+      db.withTransaction { implicit conn => dao.unclaimUser(cluster, user) }
     }
   }
 }

@@ -14,6 +14,7 @@ DELETE     /v1/kafka/cluster/:cluster/topics/:topic                       contro
 GET        /v1/kafka/credentials/:user                                    controllers.AclController.getCredentials(user: String)
 GET        /v1/kafka/cluster/:cluster/acls                                controllers.AclController.getAclsForTopic(cluster: String, topic: String)
 POST       /v1/kafka/cluster/:cluster/user                                controllers.AclController.create(cluster: String)
+DELETE     /v1/kafka/cluster/:cluster/user/:user                          controllers.AclController.deleteUser(cluster: String, user: String)
 POST       /v1/kafka/cluster/:cluster/acls                                controllers.AclController.createAclForTopic(cluster: String)
 DELETE     /v1/kafka/acls/:id                                             controllers.AclController.deleteAcl(id: String)
 

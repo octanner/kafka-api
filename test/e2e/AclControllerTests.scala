@@ -2,6 +2,7 @@ package e2e
 
 import java.util.{Properties, UUID}
 
+import anorm.SqlParser.scalar
 import anorm._
 import daos.{AclDao, TopicDao}
 import models.AclRole
@@ -140,7 +141,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
 
   private def entriesWithRoleInDb(role: String): Int = {
     db.withConnection { implicit conn =>
-      SQL"SELECT count(*) FROM acl WHERE role = $role".as(SqlParser.scalar[Int].single)
+      SQL"SELECT count(*) FROM acl WHERE role = $role".as(scalar[Int].single)
     }
   }
 
@@ -151,6 +152,12 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val role = aclRequest.role.role
       val cgname = aclRequest.consumerGroupName.getOrElse("*")
       SQL"SELECT acl_id FROM acl WHERE cluster = $cluster AND topic_id = $topicId AND role = $role AND user_id = $userId AND cg_name = $cgname".as(dao.stringParser.single)
+    }
+  }
+
+  private def getUserClaimedStatus(cluster: String, user: String) = {
+    db.withConnection { implicit conn =>
+      SQL"""SELECT claimed FROM acl_source WHERE cluster = $cluster AND username = $user""" .as(scalar[Boolean].single)
     }
   }
 
@@ -411,6 +418,16 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       val result = wsUrl(s"/v1/kafka/acls/nonexistingid").delete().futureValue
       Status(result.status) mustBe NotFound
       println(result.body)
+    }
+  }
+
+  "AclController #deleteUser" must {
+    "Delete all ACls for user and unclaim the user" in {
+      println(s"Count of ACLs for user ${username} before delete ${db.withConnection { implicit conn => dao.getAclsForUsername(cluster, username)}}")
+      val result = wsUrl(s"/v1/kafka/cluster/$cluster/user/$username").delete().futureValue
+      Status(result.status) mustBe Ok
+      println(s"Count of ACLs for user ${username} before delete ${db.withConnection { implicit conn => dao.getAclsForUsername(cluster, username)}}")
+      getUserClaimedStatus(cluster, username) mustBe false
     }
   }
 }

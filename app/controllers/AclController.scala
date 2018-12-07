@@ -20,6 +20,10 @@ class AclController @Inject() (service: AclService) extends InjectedController w
     }
   }
 
+  def deleteUser(cluster: String, user: String) = Action.async { implicit request =>
+    service.unclaimUser(cluster, user).map { _ => Ok }
+  }
+
   def createAclForTopic(cluster: String) = Action.async { implicit request =>
     processRequest[AclRequest](createPermissions(cluster))
   }
