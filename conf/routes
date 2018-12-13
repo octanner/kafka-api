@@ -2,27 +2,32 @@
 # This file defines all application routes (Higher priority routes first)
 # ~~~~
 
-GET        /octhc                                                         controllers.HealthController.health
+GET        /octhc                                                                   controllers.HealthController.health
 
-GET        /v1/kafka/clusters                                             controllers.ClusterController.getClusters
+GET        /v1/kafka/clusters                                                       controllers.ClusterController.getClusters
 
-POST       /v1/kafka/cluster/:cluster/topic                               controllers.TopicController.create(cluster: String)
-GET        /v1/kafka/topics/:topic                                        controllers.TopicController.getTopicInfo(topic: String)
-GET        /v1/kafka/topics                                               controllers.TopicController.getAllTopics
-DELETE     /v1/kafka/cluster/:cluster/topics/:topic                       controllers.TopicController.deleteTopic(cluster: String, topic: String)
+POST       /v1/kafka/cluster/:cluster/topic                                         controllers.TopicController.create(cluster: String)
+GET        /v1/kafka/topics/:topic                                                  controllers.TopicController.getTopicInfo(topic: String)
+GET        /v1/kafka/topics                                                         controllers.TopicController.getAllTopics
+DELETE     /v1/kafka/cluster/:cluster/topics/:topic                                 controllers.TopicController.deleteTopic(cluster: String, topic: String)
 
-GET        /v1/kafka/credentials/:user                                    controllers.AclController.getCredentials(user: String)
-GET        /v1/kafka/cluster/:cluster/acls                                controllers.AclController.getAclsForTopic(cluster: String, topic: String)
-POST       /v1/kafka/cluster/:cluster/user                                controllers.AclController.create(cluster: String)
-DELETE     /v1/kafka/user/:user                                           controllers.AclController.deleteUser(user: String)
-POST       /v1/kafka/cluster/:cluster/acls                                controllers.AclController.createAclForTopic(cluster: String)
-DELETE     /v1/kafka/acls/:id                                             controllers.AclController.deleteAcl(id: String)
+GET        /v1/kafka/credentials/:user                                              controllers.AclController.getCredentials(user: String)
+GET        /v1/kafka/cluster/:cluster/acls                                          controllers.AclController.getAclsForTopic(cluster: String, topic: String)
+POST       /v1/kafka/cluster/:cluster/user                                          controllers.AclController.create(cluster: String)
+DELETE     /v1/kafka/user/:user                                                     controllers.AclController.deleteUser(user: String)
+POST       /v1/kafka/cluster/:cluster/acls                                          controllers.AclController.createAclForTopic(cluster: String)
+DELETE     /v1/kafka/acls/:id                                                       controllers.AclController.deleteAcl(id: String)
 
-GET        /v1/kafka/cluster/:cluster/schemas                             controllers.SchemaController.getSchemas(cluster: String)
-GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions            controllers.SchemaController.getSchemaVersions(cluster: String, schema: String)
-GET        /v1/kafka/cluster/:cluster/schemas/:schema                     controllers.SchemaController.getSchema(cluster: String, schema: String)
-POST       /v1/kafka/cluster/:cluster/topic-schema-mapping                controllers.TopicController.createSchemaMapping(cluster: String)
-GET        /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings controllers.TopicController.getTopicSchemaMappings(cluster: String, topic: String)
-POST       /v1/kafka/cluster/:cluster/topic-key-mapping                   controllers.TopicController.createKeyMapping(cluster: String)
-GET        /v1/kafka/cluster/:cluster/configs                             controllers.TopicController.getAllConfigSets(cluster: String)
-GET        /v1/kafka/cluster/:cluster/configs/:name                       controllers.TopicController.getConfigSet(cluster: String, name: String)
+GET        /v1/kafka/cluster/:cluster/schemas                                       controllers.SchemaController.getSchemas(cluster: String)
+GET        /v1/kafka/cluster/:cluster/schemas/:schema/versions                      controllers.SchemaController.getSchemaVersions(cluster: String, schema: String)
+GET        /v1/kafka/cluster/:cluster/schemas/:schema                               controllers.SchemaController.getSchema(cluster: String, schema: String)
+POST       /v1/kafka/cluster/:cluster/topic-schema-mapping                          controllers.TopicController.createSchemaMapping(cluster: String)
+GET        /v1/kafka/cluster/:cluster/topics/:topic/topic-schema-mappings           controllers.TopicController.getTopicSchemaMappings(cluster: String, topic: String)
+POST       /v1/kafka/cluster/:cluster/topic-key-mapping                             controllers.TopicController.createKeyMapping(cluster: String)
+GET        /v1/kafka/cluster/:cluster/configs                                       controllers.TopicController.getAllConfigSets(cluster: String)
+GET        /v1/kafka/cluster/:cluster/configs/:name                                 controllers.TopicController.getConfigSet(cluster: String, name: String)
+
+GET        /v1/kafka/cluster/:cluster/consumer-groups                               controllers.ConsumerGroupsController.list(cluster: String)
+GET        /v1/kafka/cluster/:cluster/consumer-groups/:consumerGroupName/offsets    controllers.ConsumerGroupsController.listOffsets(cluster: String, consumerGroupName: String)
+GET        /v1/kafka/cluster/:cluster/consumer-groups/:consumerGroupName/members    controllers.ConsumerGroupsController.listMembers(cluster: String, consumerGroupName: String)
+POST       /v1/kafka/cluster/:cluster/consumer-groups/:consumerGroupName/seek       controllers.ConsumerGroupsController.seek(cluster: String, consumerGroupName: String)

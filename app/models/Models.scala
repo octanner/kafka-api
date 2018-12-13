@@ -15,6 +15,9 @@ object Models {
   case class Acl(id: String, user: String, topic: String, cluster: String, role: AclRole, consumerGroupName: Option[String])
   case class TopicKeyMapping(topicId: String, keyType: KeyType, schema: Option[String])
   case class Cluster(name: String, description: String, size: String)
+  case class ConsumerGroupOffset(topic: String, partition: Int, currentOffset: Long, logEndOffset: Long, lag: Long,
+                                 consumerId: Option[String], host: Option[String], clientId: Option[String])
+  case class ConsumerGroupMember(consumerId: String, host: String, clientId: String, partitions: Int)
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "name").read[String] and
@@ -40,4 +43,6 @@ object Models {
   implicit val basicTopicInfoFormat: Format[BasicTopicInfo] = Json.format[BasicTopicInfo]
   implicit val topicKeyMappingFormat: Format[TopicKeyMapping] = Json.format[TopicKeyMapping]
   implicit val clusterFormat: Format[Cluster] = Json.format[Cluster]
+  implicit val consumerGroupOffsetFormat: Format[ConsumerGroupOffset] = Json.format[ConsumerGroupOffset]
+  implicit val consumerGroupMemberFormat: Format[ConsumerGroupMember] = Json.format[ConsumerGroupMember]
 }
