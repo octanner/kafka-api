@@ -48,4 +48,5 @@ object AdminClientUtil {
   val KAFKA_SASL_MECHANISM_CONFIG = ".kafka.sasl.mechanism"
   val KAFKA_ADMIN_USERNAME_CONFIG = ".kafka.admin.username"
   val KAFKA_ADMIN_PASSWORD_CONFIG = ".kafka.admin.password"
+  val KAFKA_ADMIN_CONFIG_FILE = ".kafka.admin.config"
 }
