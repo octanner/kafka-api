@@ -12,6 +12,7 @@ prd.sh
 qa.sh
 stg.sh
 local_env.sh
+*.iml
 
 
 testtopic
