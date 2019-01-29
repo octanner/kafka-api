@@ -22,6 +22,7 @@ resolvers ++= Seq(
   "OCTanner snapshots" at "https://artifactory.octanner.net/snapshots/",
   "OCTanner plugins releases" at "https://artifactory.octanner.net/plugins-releases/",
   "OCTanner plugins snapshots" at "https://artifactory.octanner.net/plugins-snapshots/",
+  "Confluent" at "https://packages.confluent.io/maven/",
   Resolver.mavenLocal,
   Resolver.jcenterRepo
 )
