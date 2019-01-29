@@ -44,6 +44,7 @@ class AdminClientUtil @Inject() (conf: Configuration) {
 object AdminClientUtil {
   val ADMIN_CLIENT_ID = "kafka-api"
   val KAFKA_LOCATION_CONFIG = ".kafka.location"
+  val AVRO_LOCATION_CONFIG = ".kafka.avro.registry.location"
   val KAFKA_SECURITY_PROTOCOL_CONFIG = ".kafka.security.protocol"
   val KAFKA_SASL_MECHANISM_CONFIG = ".kafka.sasl.mechanism"
   val KAFKA_ADMIN_USERNAME_CONFIG = ".kafka.admin.username"

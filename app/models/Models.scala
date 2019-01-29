@@ -18,6 +18,9 @@ object Models {
   case class ConsumerGroupOffset(topic: String, partition: Int, currentOffset: Long, logEndOffset: Long, lag: Long,
                                  consumerId: Option[String], host: Option[String], clientId: Option[String])
   case class ConsumerGroupMember(consumerId: String, host: String, clientId: String, partitions: Int)
+  case class EndOffset(topic: String, partition: Int, offset: Long)
+  case class KafkaMessage(partition: Int, offset: Long, schemaName: String, key: String, value: String)
+  case class TopicPreview(endOffsets: List[EndOffset], previewMessages: List[KafkaMessage])
 
   val topicConfigReads: Reads[TopicConfiguration] = (
     (JsPath \ "name").read[String] and
@@ -45,4 +48,7 @@ object Models {
   implicit val clusterFormat: Format[Cluster] = Json.format[Cluster]
   implicit val consumerGroupOffsetFormat: Format[ConsumerGroupOffset] = Json.format[ConsumerGroupOffset]
   implicit val consumerGroupMemberFormat: Format[ConsumerGroupMember] = Json.format[ConsumerGroupMember]
+  implicit val endOffsetFormat: Format[EndOffset] = Json.format[EndOffset]
+  implicit val kafkaMessageFormat: Format[KafkaMessage] = Json.format[KafkaMessage]
+  implicit val topicPreviewFormat: Format[TopicPreview] = Json.format[TopicPreview]
 }

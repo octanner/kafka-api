@@ -36,6 +36,12 @@ class ConsumerGroupsController @Inject() (service: ConsumerGroupsService) extend
     processRequest[ConsumerGroupSeekRequest](handleSeekRequest(cluster, consumerGroupName))
   }
 
+  def preview(cluster: String, topic: String) = Action.async {
+    service.previewTopic(cluster, topic).map { tp =>
+      Ok(Json.toJson(tp))
+    }
+  }
+
   private def handleSeekRequest(cluster: String, consumerGroupName: String)(seekRequest: ConsumerGroupSeekRequest): Future[Result] = {
     service.seek(cluster, consumerGroupName, seekRequest).map { _ =>
       Ok
