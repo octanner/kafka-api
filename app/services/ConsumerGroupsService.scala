@@ -2,10 +2,11 @@ package services
 
 import javax.inject.Inject
 import kafka.admin.ConsumerGroupCommand
-import models.Models.{ ConsumerGroupMember, ConsumerGroupOffset }
+import models.Models.{ ConsumerGroupMember, ConsumerGroupOffset, EndOffset, KafkaMessage, TopicPreview }
 import models.http.HttpModels.ConsumerGroupSeekRequest
+import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.admin.ConsumerGroupDescription
-import org.apache.kafka.clients.consumer.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.{ KafkaConsumer, OffsetAndMetadata }
 import org.apache.kafka.common.TopicPartition
 import play.api.{ Configuration, Logger }
 import utils.AdminClientUtil
@@ -65,6 +66,29 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
           throw e
       }
 
+    }
+  }
+
+  def previewTopic(cluster: String, topic: String): Future[TopicPreview] = {
+    for {
+      partitions <- partitionsForTopic(cluster, topic)
+    } yield {
+      val consumer = consumerUtil.getKafkaConsumer(cluster, Some(List(topic)), "kafka-api-preview")
+      val endOffsets = consumer.endOffsets(partitions.asJava).asScala.toMap
+      seekToLatestForEachPartition(consumer, endOffsets, 2)
+
+      val endOffsetsList = endOffsets.map { case (p, o) => EndOffset(p.topic(), p.partition(), o) }.toList
+      val numPolls = (2 * partitions.size) + 10
+      val messages = for {
+        _ <- (1 to numPolls)
+        cr <- consumer.poll(100).iterator.asScala
+      } yield {
+        val schemaName = cr.value.getSchema.getName
+        KafkaMessage(cr.partition, cr.offset, schemaName, cr.key.toString, cr.value.toString)
+      }
+
+      consumer.close()
+      TopicPreview(endOffsetsList, messages.toList)
     }
   }
 
@@ -165,6 +189,40 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
       case Failure(e) =>
         logger.error(s"Failed to get Topic description for topic ${topic}")
         throw e
+    }
+  }
+
+  private def partitionsForTopic(cluster: String, topic: String): Future[List[TopicPartition]] = {
+    Future {
+      val adminClient = util.getAdminClient(cluster)
+      val descResponse = Try(adminClient.describeTopics(Seq(topic).asJava).all().get.asScala)
+      adminClient.close()
+      descResponse match {
+        case Success(topicToTopicDescMap) =>
+          val partitions = for {
+            (t, topicDesc) <- topicToTopicDescMap
+            tp <- topicDesc.partitions().asScala.map { p => new TopicPartition(topicDesc.name, p.partition) }
+          } yield tp
+          partitions.toList
+        case Failure(e) =>
+          logger.error(s"Failed to describe topic `${topic}` for cluster `${cluster}`")
+          throw e
+      }
+    }
+  }
+
+  private def seekToLatestForEachPartition(
+    consumer:   KafkaConsumer[Unit, GenericRecord],
+    endOffsets: Map[TopicPartition, java.lang.Long],
+    seekBy:     Int) = {
+    // Set offset to read last 2 messages of the partition
+    // dummy poll to seek the offsets successfully
+    consumer.poll(100)
+    endOffsets.foreach {
+      case (tp, end) => {
+        val offset = if (end > seekBy) end - seekBy else 0
+        consumer.seek(tp, offset)
+      }
     }
   }
 }
