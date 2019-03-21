@@ -142,19 +142,22 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
   def createPermissions(cluster: String, aclRequest: AclRequest) = {
     logger.info(s"acl create request $aclRequest")
-    db.withTransaction { implicit conn =>
-      val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
-      logger.info(s"validated acl create request $validatedAclRequest")
-      Try(dao.addPermissionToDb(cluster, validatedAclRequest)) match {
-        case Success(id) =>
-          createKafkaAcl(cluster, validatedAclRequest)
-          val acl = dao.getAcl(id)
-          (id -> acl.get)
-        case Failure(e) =>
-          logger.error(s"Failed to create permission in DB: ${e.getMessage}")
-          throw e
-      }
+
+    val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
+    logger.info(s"validated acl create request $validatedAclRequest")
+    Try( db.withTransaction{ implicit conn => dao.addPermissionToDb(cluster, validatedAclRequest)}) match {
+      case Success(id) =>
+        createKafkaAcl(cluster, validatedAclRequest)
+        val acl =  db.withTransaction{ implicit conn => dao.getAcl(id)}
+        if(acl.isEmpty) {
+          logger.error(s"cannot get acl from database for acl id ${id}")
+        }
+        (id -> acl.get)
+      case Failure(e) =>
+        logger.error(s"Failed to create permission in DB: ${e.getMessage}")
+        throw e
     }
+
   }
 
   def createKafkaAcl(cluster: String, aclRequest: AclRequest) = {

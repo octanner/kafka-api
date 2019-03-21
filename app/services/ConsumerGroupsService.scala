@@ -1,5 +1,7 @@
 package services
 
+import java.util.UUID
+
 import javax.inject.Inject
 import kafka.admin.ConsumerGroupCommand
 import models.Models.{ ConsumerGroupMember, ConsumerGroupOffset, EndOffset, KafkaMessage, TopicPreview }
@@ -73,7 +75,8 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
     for {
       partitions <- partitionsForTopic(cluster, topic)
     } yield {
-      val consumer = consumerUtil.getKafkaConsumer(cluster, Some(List(topic)), "kafka-api-preview")
+      val consumerGroupName = "kafka-api-preview" + UUID.randomUUID.toString
+      val consumer = consumerUtil.getKafkaConsumer(cluster, Some(List(topic)), consumerGroupName)
       val endOffsets = consumer.endOffsets(partitions.asJava).asScala.toMap
       seekToLatestForEachPartition(consumer, endOffsets, 2)
 
@@ -88,6 +91,10 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
       }
 
       consumer.close()
+      //delete the one time consumer group
+      val adminClient = util.getAdminClient(cluster)
+      adminClient.deleteConsumerGroups(List(consumerGroupName).asJava).all().get
+      adminClient.close()
       TopicPreview(endOffsetsList, messages.toList)
     }
   }
