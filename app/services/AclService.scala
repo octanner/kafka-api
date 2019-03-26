@@ -145,11 +145,11 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
     val validatedAclRequest = validateOrAddConsumerGroupName(aclRequest)
     logger.info(s"validated acl create request $validatedAclRequest")
-    Try( db.withTransaction{ implicit conn => dao.addPermissionToDb(cluster, validatedAclRequest)}) match {
+    Try(db.withTransaction { implicit conn => dao.addPermissionToDb(cluster, validatedAclRequest) }) match {
       case Success(id) =>
         createKafkaAcl(cluster, validatedAclRequest)
-        val acl =  db.withTransaction{ implicit conn => dao.getAcl(id)}
-        if(acl.isEmpty) {
+        val acl = db.withTransaction { implicit conn => dao.getAcl(id) }
+        if (acl.isEmpty) {
           logger.error(s"cannot get acl from database for acl id ${id}")
         }
         (id -> acl.get)

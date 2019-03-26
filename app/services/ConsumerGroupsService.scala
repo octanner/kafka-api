@@ -87,7 +87,10 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
         cr <- consumer.poll(100).iterator.asScala
       } yield {
         val schemaName = cr.value.getSchema.getName
-        KafkaMessage(cr.partition, cr.offset, schemaName, cr.key.toString, cr.value.toString)
+        println(s"cr: ${cr}")
+        val key = if (cr.key == null) null else cr.key.toString
+        val value = if (cr.value == null) null else cr.value.toString
+        KafkaMessage(cr.partition, cr.offset, schemaName, key, value)
       }
 
       consumer.close()
