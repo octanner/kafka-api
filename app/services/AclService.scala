@@ -167,9 +167,11 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
     else
       "*"
     val groupAclBinding = createAclBinding(aclRequest, ResourceType.GROUP, resourceName = groupName, host = "*")
+    val transactionAclBinding = createAclBinding(aclRequest, ResourceType.TRANSACTIONAL_ID, resourceName = "*", host = "*")
 
     val adminClient = util.getAdminClient(cluster)
-    val aclCreationResponse = adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
+    val aclCreationResponse = adminClient.createAcls(List(topicAclBinding, groupAclBinding, transactionAclBinding).asJava).all()
+    //    val aclCreationResponse = adminClient.createAcls(List(topicAclBinding, groupAclBinding).asJava).all()
     adminClient.close()
     Try(aclCreationResponse.get) match {
       case Success(_) =>
@@ -200,9 +202,10 @@ class AclService @Inject() (db: Database, dao: AclDao, topicDao: TopicDao, util:
 
   def deleteKafkaAcl(acl: Acl, otherAclsForUserTopicAndRole: List[Acl]) = {
     val groupAclBinding = createAclBindingFilter(acl, ResourceType.GROUP, resourceName = acl.consumerGroupName.getOrElse("*"), host = "*")
+    val transactionAclBinding = createAclBindingFilter(acl, ResourceType.TRANSACTIONAL_ID, resourceName = "*", host = "*")
     val aclBindingsToRemove = if (otherAclsForUserTopicAndRole.isEmpty) {
       val topicAclBinding = createAclBindingFilter(acl, ResourceType.TOPIC, acl.topic, host = "*")
-      List(topicAclBinding, groupAclBinding)
+      List(topicAclBinding, groupAclBinding, transactionAclBinding)
     } else {
       List(groupAclBinding)
     }

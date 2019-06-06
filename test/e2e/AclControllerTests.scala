@@ -191,7 +191,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 3
     }
 
     "return same id for repeat permission request" in {
@@ -211,7 +211,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       entriesWithRoleInDb(roleName) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 3
     }
 
     "allow user read access for topic" in {
@@ -229,7 +229,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       result.body mustBe expectedJson
       // Acl should be created for topic and group
       println(s"-------${aclExistsInKafka(username, role.operation)}")
-      aclExistsInKafka(username, role.operation).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 3
     }
 
     "same ID and consumer group name for repeat request with same cg name " in {
@@ -247,7 +247,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       result.body mustBe expectedJson
       // Acl should be created for topic and group
       println(s"-------${aclExistsInKafka(username, role.operation)}")
-      aclExistsInKafka(username, role.operation).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 3
     }
 
     "allow user second read access for topic with different cg name" in {
@@ -264,7 +264,7 @@ class AclControllerTests extends IntTestSpec with BeforeAndAfterEach with Embedd
       entriesWithRoleInDb(role.role) mustBe 1
       result.body mustBe expectedJson
       // Acl should be created for topic and group
-      aclExistsInKafka(username, role.operation).size() mustEqual 2
+      aclExistsInKafka(username, role.operation).size() mustEqual 3
     }
 
     "fail to grant permissions for unknown role" in {
