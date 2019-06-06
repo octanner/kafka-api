@@ -146,6 +146,7 @@ class ConsumerGroupsService @Inject() (util: AdminClientUtil, consumerUtil: Cons
         "--reset-offsets", "--execute")
       if (seekRequest.seekTo.equalsIgnoreCase(SEEK_TO_BEGINNING)) {
         cmdArgs += "--to-earliest"
+        println(cmdArgs)
         ConsumerGroupCommand.main(cmdArgs.toArray)
       } else if (seekRequest.seekTo.equalsIgnoreCase(SEEK_TO_END)) {
         cmdArgs += "--to-latest"
